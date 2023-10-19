@@ -1,0 +1,349 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		BB65F9642AE01F2900D41056 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9632AE01F2900D41056 /* main.swift */; };
+		BB65F9712AE0202B00D41056 /* SourceKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9702AE0202B00D41056 /* SourceKit.swift */; };
+		BB65F9732AE0551200D41056 /* Opaqueify.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9722AE0551200D41056 /* Opaqueify.swift */; };
+		BB65F9762AE0575B00D41056 /* Popen in Frameworks */ = {isa = PBXBuildFile; productRef = BB65F9752AE0575B00D41056 /* Popen */; };
+		BB65F9792AE0633A00D41056 /* SwiftRegex in Frameworks */ = {isa = PBXBuildFile; productRef = BB65F9782AE0633A00D41056 /* SwiftRegex */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		BB65F95E2AE01F2900D41056 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		BB65F9602AE01F2900D41056 /* opaqueify */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = opaqueify; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB65F9632AE01F2900D41056 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		BB65F96E2AE0202B00D41056 /* sourcekitd.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sourcekitd.h; sourceTree = "<group>"; };
+		BB65F96F2AE0202B00D41056 /* opaqueify-Bridging-Header.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "opaqueify-Bridging-Header.h"; sourceTree = "<group>"; };
+		BB65F9702AE0202B00D41056 /* SourceKit.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SourceKit.swift; sourceTree = "<group>"; };
+		BB65F9722AE0551200D41056 /* Opaqueify.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Opaqueify.swift; sourceTree = "<group>"; };
+		BBCAE3D62AE0E8F700F1AEA9 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		BBCAE3D72AE0E8F700F1AEA9 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		BBCAE3D82AE0E90400F1AEA9 /* Package.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = Package.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		BB65F95D2AE01F2900D41056 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB65F9792AE0633A00D41056 /* SwiftRegex in Frameworks */,
+				BB65F9762AE0575B00D41056 /* Popen in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		BB65F9572AE01F2900D41056 = {
+			isa = PBXGroup;
+			children = (
+				BBCAE3D62AE0E8F700F1AEA9 /* LICENSE */,
+				BBCAE3D72AE0E8F700F1AEA9 /* README.md */,
+				BBCAE3D82AE0E90400F1AEA9 /* Package.swift */,
+				BB65F9622AE01F2900D41056 /* opaqueify */,
+				BB65F9612AE01F2900D41056 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		BB65F9612AE01F2900D41056 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				BB65F9602AE01F2900D41056 /* opaqueify */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		BB65F9622AE01F2900D41056 /* opaqueify */ = {
+			isa = PBXGroup;
+			children = (
+				BB65F96F2AE0202B00D41056 /* opaqueify-Bridging-Header.h */,
+				BB65F9722AE0551200D41056 /* Opaqueify.swift */,
+				BB65F9702AE0202B00D41056 /* SourceKit.swift */,
+				BB65F96E2AE0202B00D41056 /* sourcekitd.h */,
+				BB65F9632AE01F2900D41056 /* main.swift */,
+			);
+			path = opaqueify;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BB65F95F2AE01F2900D41056 /* opaqueify */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB65F9672AE01F2900D41056 /* Build configuration list for PBXNativeTarget "opaqueify" */;
+			buildPhases = (
+				BB65F95C2AE01F2900D41056 /* Sources */,
+				BB65F95D2AE01F2900D41056 /* Frameworks */,
+				BB65F95E2AE01F2900D41056 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = opaqueify;
+			packageProductDependencies = (
+				BB65F9752AE0575B00D41056 /* Popen */,
+				BB65F9782AE0633A00D41056 /* SwiftRegex */,
+			);
+			productName = opaqueify;
+			productReference = BB65F9602AE01F2900D41056 /* opaqueify */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		BB65F9582AE01F2900D41056 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1430;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					BB65F95F2AE01F2900D41056 = {
+						CreatedOnToolsVersion = 14.3;
+					};
+				};
+			};
+			buildConfigurationList = BB65F95B2AE01F2900D41056 /* Build configuration list for PBXProject "opaqueify" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = BB65F9572AE01F2900D41056;
+			packageReferences = (
+				BB65F9742AE0575B00D41056 /* XCRemoteSwiftPackageReference "Popen" */,
+				BB65F9772AE0633A00D41056 /* XCRemoteSwiftPackageReference "SwiftRegex5" */,
+			);
+			productRefGroup = BB65F9612AE01F2900D41056 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BB65F95F2AE01F2900D41056 /* opaqueify */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		BB65F95C2AE01F2900D41056 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BB65F9732AE0551200D41056 /* Opaqueify.swift in Sources */,
+				BB65F9642AE01F2900D41056 /* main.swift in Sources */,
+				BB65F9712AE0202B00D41056 /* SourceKit.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		BB65F9652AE01F2900D41056 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.3;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		BB65F9662AE01F2900D41056 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.3;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		BB65F9682AE01F2900D41056 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "opaqueify/opaqueify-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		BB65F9692AE01F2900D41056 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "opaqueify/opaqueify-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		BB65F95B2AE01F2900D41056 /* Build configuration list for PBXProject "opaqueify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB65F9652AE01F2900D41056 /* Debug */,
+				BB65F9662AE01F2900D41056 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		BB65F9672AE01F2900D41056 /* Build configuration list for PBXNativeTarget "opaqueify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BB65F9682AE01F2900D41056 /* Debug */,
+				BB65F9692AE01F2900D41056 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BB65F9742AE0575B00D41056 /* XCRemoteSwiftPackageReference "Popen" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnno1962/Popen.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
+		BB65F9772AE0633A00D41056 /* XCRemoteSwiftPackageReference "SwiftRegex5" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnno1962/SwiftRegex5.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BB65F9752AE0575B00D41056 /* Popen */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB65F9742AE0575B00D41056 /* XCRemoteSwiftPackageReference "Popen" */;
+			productName = Popen;
+		};
+		BB65F9782AE0633A00D41056 /* SwiftRegex */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB65F9772AE0633A00D41056 /* XCRemoteSwiftPackageReference "SwiftRegex5" */;
+			productName = SwiftRegex;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = BB65F9582AE01F2900D41056 /* Project object */;
+}
