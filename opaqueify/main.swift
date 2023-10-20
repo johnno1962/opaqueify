@@ -41,5 +41,17 @@ for (file, syntax) in files {
     }
 }
 
+if argv.count > 2 {
+    let xcode = argv[2]
+    let phaseTwo = extractAnyErrors(project: project, xcode: xcode)
+
+    for (file, patches) in phaseTwo {
+        if let patched = addressErrors(file: file, patches: patches) {
+            try? patched.write(toFile: file,
+                               atomically: true, encoding: .utf8)
+        }
+    }
+}
+
 print(edits, "edits in",
       Date.timeIntervalSinceReferenceDate-start, "seconds")

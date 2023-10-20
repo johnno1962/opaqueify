@@ -77,7 +77,7 @@ func extractProtocols(from project: URL, commands: [String])
                               resp: dict) { node in
             let offset = node.getInt(key: sourceKit.offsetID)
 
-            while true {
+            while node.getString(key: sourceKit.typenameID) != nil {
                 command[""+argumentsToRemove
                     .joined(separator: "|")] = ""
 
@@ -93,13 +93,15 @@ func extractProtocols(from project: URL, commands: [String])
                     if argumentsToRemove.count > toRemove {
                         continue
                     }
+                    print(error)
                     break
                 }
                 let dict = SKApi.response_get_value(info)
                 if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ?? node.getString(key: sourceKit.annotatedID),
                    notes.contains("ref.protocol") {
+//                    print(notes)
                     for (usr, name): (String, String) in notes[
-                        #"<ref.protocol usr=\"s:([^"]*)\">([^<]*)</ref.protocol>"#] {
+                        #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
                         protocolMap[name] = "$s"+usr
                     }
                 }
@@ -193,15 +195,60 @@ func apply(patches: [Patch], to file: String) -> String? {
         
         stage("33333333333333")
         // fix up optional syntax
-        lines[0][#"\b((?:any|some)\s+\#(ident))\#\?"#]
-            = ["($1)?"]
+        lines[0][#"\b((?:any|some)(\s+\#(ident)))\#\?"#]
+            = ["(any$2)?"]
 
         stage("44444444444444")
         // a few special cases
-        lines[0][#"(some (\#(ident)\s*))(?=\.\.\.| =|\.Type)"#]
+        lines[0][#"(some (\#(ident)\s*))(?=\.\.\.| =|\.Type|\) in)"#]
             = ["any $2"]
+        stage("55555555555555")
     }
 
     parts.append(String(cString: bytes))
-    return parts.reversed().joined()
+    return parts.reversed().joined()[#"some some"#, "some"]
+}
+
+typealias AnyError = (line: Int, char: Int, proto: String)
+
+func extractAnyErrors(project: URL, xcode: String)
+    -> [String: [AnyError]] {
+    guard let stdout = popen("""
+        cd \(project.deletingLastPathComponent().path) &&
+        git add .; rm -rf .build && \(xcode)/Contents/Developer/\
+        Toolchains/XcodeDefault.xctoolchain/usr/bin/\
+        swift build -Xswiftc -enable-upcoming-feature \
+        -Xswiftc ExistentialAny 2>&1 | sort -u
+        """, "r") else {
+        return [:]
+    }
+
+    var out = [String: [AnyError]]()
+    while let line = stdout.readLine() {
+        if let (file, line, char, proto):
+            (String, String, String, String) =
+            line[#"^([^:]+):(\d+):(\d+): "# +
+                 #"error: use of protocol '([^']+)'"#] {
+            out[file, default: []].append(
+                (Int(line) ?? 0, Int(char) ?? 0, proto))
+        }
+    }
+
+    return out
+}
+
+func addressErrors(file: String, patches: [AnyError]) -> String? {
+    guard var source = try? String(contentsOfFile: file) else {
+        print("Could not open file: \(file)")
+        return nil
+    }
+
+    for patch in patches.sorted(by: { $0.line > $1.line }) {
+        let offset = "^(?:.*\n){\(patch.line-1)}"
+        let change = ".{\(patch.char-1)}.*?(\(patch.proto))"
+        source[offset+change] = ["any $1"]
+        source[#"(any \#(patch.proto))\#\?"#] = "($1)"
+    }
+
+    return source
 }
