@@ -52,7 +52,11 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "/Volumes/Data2/some/repos/0003_25532_Charts/Package.swift"
+            argument = "/Volumes/Data2/some2/NetNewsWire/NetNewsWire.xcodeproj"
+            isEnabled = "YES">
+         </CommandLineArgument>
+         <CommandLineArgument
+            argument = "/Users/johnholdsworth/D2/Xcode151b1.app"
             isEnabled = "YES">
          </CommandLineArgument>
       </CommandLineArguments>

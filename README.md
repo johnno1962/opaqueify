@@ -25,7 +25,16 @@ save you the bulk of the typing necessary to make a conversion.
 You may want to then take the migration to opaque types further.
 
 ```
-Usage is: /path/to/executable </path/to/project's/Package.swift>
+Usage is: 
+/path/to/executable </path/to/Package.swift> [/path/to/recent/Xcode.app]
 ```
-This project is very much an experiement on a "best effort"
-basis but hopefully it should save you some time.
+This project is very much an experiment on a "best effort"
+basis but hopefully it should save you some typing.
+
+The project has been extended to support Xcode .xcproject files
+instead of just Swift packages. Testing with NetNewsWire has
+shown your millage may vary quite a bit but the recipe I found
+works best is to delete the derived data for the project, close
+and re-open it and build it then run this program specifying the 
+full path to the project file and the path to an Xcode 15+ that
+supports the option `-enable-upcoming-feature ExistentialAny`.
