@@ -18,18 +18,18 @@ This is a fairly conservative rule that should realise much of any
 perform benefit to be had through increased use of `some` for
 procedure arguments as they are generally the bulk of declarations.
 
-Your milage may very much vary as this is still a change to your
-code so you will likely have to pick though a handful of errors
+Your milage may vary as this is still a change to your source
+so you will likely have to pick though a handful of errors
 when you next try to compile but the hope is this package will
 save you the bulk of the typing necessary to make a conversion.
-You may want to then take the migration to opaque types further.
+You may then want to take the migration to opaque types further.
 
 ```
 Usage is: 
 /path/to/executable </path/to/Package.swift> [/path/to/recent/Xcode.app]
 ```
-This project is very much an experiment on a "best effort"
-basis but hopefully it should save you some typing.
+This project is an experiment on a "best effort"
+basis but hopefully it should save you `some` typing.
 
 The project has been extended to support Xcode .xcproject files
 instead of just Swift packages. Testing with NetNewsWire has

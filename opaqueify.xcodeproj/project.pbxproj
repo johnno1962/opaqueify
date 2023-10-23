@@ -12,6 +12,7 @@
 		BB65F9732AE0551200D41056 /* Opaqueify.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9722AE0551200D41056 /* Opaqueify.swift */; };
 		BB65F9762AE0575B00D41056 /* Popen in Frameworks */ = {isa = PBXBuildFile; productRef = BB65F9752AE0575B00D41056 /* Popen */; };
 		BB65F9792AE0633A00D41056 /* SwiftRegex in Frameworks */ = {isa = PBXBuildFile; productRef = BB65F9782AE0633A00D41056 /* SwiftRegex */; };
+		BB942F342AE4E42D00FA9833 /* Fortify in Frameworks */ = {isa = PBXBuildFile; productRef = BB942F332AE4E42D00FA9833 /* Fortify */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +44,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB942F342AE4E42D00FA9833 /* Fortify in Frameworks */,
 				BB65F9792AE0633A00D41056 /* SwiftRegex in Frameworks */,
 				BB65F9762AE0575B00D41056 /* Popen in Frameworks */,
 			);
@@ -101,6 +103,7 @@
 			packageProductDependencies = (
 				BB65F9752AE0575B00D41056 /* Popen */,
 				BB65F9782AE0633A00D41056 /* SwiftRegex */,
+				BB942F332AE4E42D00FA9833 /* Fortify */,
 			);
 			productName = opaqueify;
 			productReference = BB65F9602AE01F2900D41056 /* opaqueify */;
@@ -133,6 +136,7 @@
 			packageReferences = (
 				BB65F9742AE0575B00D41056 /* XCRemoteSwiftPackageReference "Popen" */,
 				BB65F9772AE0633A00D41056 /* XCRemoteSwiftPackageReference "SwiftRegex5" */,
+				BB942F322AE4E42D00FA9833 /* XCRemoteSwiftPackageReference "Fortify" */,
 			);
 			productRefGroup = BB65F9612AE01F2900D41056 /* Products */;
 			projectDirPath = "";
@@ -330,6 +334,14 @@
 				minimumVersion = 5.0.0;
 			};
 		};
+		BB942F322AE4E42D00FA9833 /* XCRemoteSwiftPackageReference "Fortify" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnno1962/Fortify";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.1.5;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -342,6 +354,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB65F9772AE0633A00D41056 /* XCRemoteSwiftPackageReference "SwiftRegex5" */;
 			productName = SwiftRegex;
+		};
+		BB942F332AE4E42D00FA9833 /* Fortify */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB942F322AE4E42D00FA9833 /* XCRemoteSwiftPackageReference "Fortify" */;
+			productName = Fortify;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

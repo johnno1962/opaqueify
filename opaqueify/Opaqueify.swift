@@ -36,28 +36,35 @@ func extract(build: String) -> [String] {
     return commands
 }
 
-func lastLog(project: URL) -> String {
+func lastLog(project: URL) -> String? {
     let projectName = project
         .deletingPathExtension().lastPathComponent
     let search = "ls -t ~/Library/Developer/Xcode/DerivedData/\(projectName)-*/Logs/Build/*.xcactivitylog"
     guard let logs = popen(search, "r"),
           let log = logs.readLine() else {
         print("⚠️ Could not find logs using: \(search)")
-        return "/tmp/build.log"
+        return nil
     }
 
     _ = pclose(logs)
     return log
 }
 
-func build(project: URL) -> [String] {
-    let root = project.deletingLastPathComponent().path
+func build(project: URL, xcode: String? = nil) -> [String] {
+    let build: String
     if project.lastPathComponent == "Package.swift" {
-        let build = "rm -rf .build; swift build -v"
-        return extract(build: "cd \"\(root)\" && \(build)")
+        build = "rm -rf .build; swift build -v"
+    } else if let log = lastLog(project: project) {
+        build = "/usr/bin/gunzip <\(log) | /usr/bin/tr '\\r' '\\n'"
     } else {
-        return extract(build: "gunzip <\(lastLog(project: project)) | /usr/bin/tr '\\r' '\\n' | tee /tmp/build.txt")
+        let xcbuild = (xcode ?? "/Applications/Xcode.app") + "/Contents/Developer/usr/bin/xcodebuild"
+        build = "\(xcbuild) clean; \(xcbuild) -project \(project.lastPathComponent)"
     }
+
+    let root = project.deletingLastPathComponent().path
+    return extract(build: """
+        cd "\(root)" && \(build) 2>&1 | /usr/bin/tee /tmp/build.txt
+        """)
 }
 
 var argumentsToRemove = Set([
@@ -67,10 +74,12 @@ var argumentsToRemove = Set([
         #"-I\S+ "#,
 ])
 
+typealias ProtocolInfo = [String: String]
+
 func extractProtocols(from project: URL, commands: [String])
-    -> ([String: String], [String: sourcekitd_variant_t]) {
-    var protocolMap = ["Error": "$ss5ErrorP"]
-    var filePaths = [String: sourcekitd_variant_t]()
+    -> (ProtocolInfo, [String: sourcekitd_variant_t]) {
+    var protocolInfo = ["Error": "$ss5ErrorP"]
+    var fileSyntax = [String: sourcekitd_variant_t]()
     guard let root = try? project.deletingLastPathComponent()
             .resourceValues(forKeys: [.canonicalPathKey])
             .canonicalPath,
@@ -79,33 +88,36 @@ func extractProtocols(from project: URL, commands: [String])
     }
 
     for relative in enumerator {
-        let fullpath = URL(fileURLWithPath: root)
-            .appendingPathComponent(relative as! String)
+        guard let relative = relative as? String else { continue }
+        let fullpath = URL(fileURLWithPath: relative,
+            relativeTo: URL(fileURLWithPath: root))
         guard fullpath.path.hasSuffix(".swift") else {
             continue
         }
 
         if let source = try? String(contentsOfFile: fullpath.path) {
             for proto: String in
-                source[#"\bprotocol\s+(\w+)\b"#] {
-                protocolMap[proto] = fullpath.path
+                source[#"\bprotocol\s+(\w+)\b"#]
+                where protocolInfo[proto] == nil {
+                protocolInfo[proto] = fullpath.path
             }
         }
 
         let resp = sourceKit.syntaxMap(filePath: fullpath.path, subSyntax: true)
 //        SKApi.response_description_dump(resp)
         let dict = SKApi.response_get_value(resp)
-        filePaths[fullpath.path] = dict
+        fileSyntax[fullpath.path] = dict
 
         guard var command = commands.first(where: {
             $0.contains(" -primary-file \(fullpath.path) ") }) else {
-            if !fullpath.path.contains("/Tests/") {
-                print("Missing compiler args for \(fullpath)")
+            if !fullpath.path[#"/Tests/|\.build/|Examples?/"#] {
+                print("Missing compiler args for \(fullpath.path)")
             }
             continue
         }
 
-        print("Processing", fullpath); fflush(stdout)
+        print("Processing", fullpath.relativePath,
+              protocolInfo.count, "protocols"); fflush(stdout)
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
             let offset = node.getInt(key: sourceKit.offsetID)
@@ -126,7 +138,7 @@ func extractProtocols(from project: URL, commands: [String])
                             .replacingOccurrences(of: "\\", with: "\\\\"))
                     }
                     for argh: String in error[
-                        #"(?:unexpected|duplicate) input file: (.*?)error:"#] {
+                        #"(?:unexpected|duplicate) input file: '(.*?)'?error:"#] {
                         argumentsToRemove.insert(argh)
                     }
                     if argumentsToRemove.count > toRemove {
@@ -141,7 +153,7 @@ func extractProtocols(from project: URL, commands: [String])
 //                    print(notes)
                     for (usr, name): (String, String) in notes[
                         #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
-                        protocolMap[name] = "$s"+usr
+                        protocolInfo[name] = "$s"+usr
                     }
                 }
 
@@ -150,19 +162,21 @@ func extractProtocols(from project: URL, commands: [String])
         }
     }
 
-    print("Protocols are:", protocolMap)
-    protocolMap["Sendable"] = nil
-    protocolMap["Sequence"] = nil
-    protocolMap["Collection"] = nil
-    return (protocolMap, filePaths)
+    protocolInfo["Sendable"] = nil
+    protocolInfo["Sequence"] = nil
+    protocolInfo["Collection"] = nil
+    return (protocolInfo, fileSyntax)
 }
 
-typealias Patch = (offset: Int, (from: String, to: String))
+typealias Replace = (from: String, to: String)
+typealias Patch = (offset: Int, replace: Replace)
 
-func process(syntax: sourcekitd_variant_t,
-             for fullpath: String,
-             protocols: [String: String],
-             protoRegexp: String) -> [Patch] {
+func process(syntax: sourcekitd_variant_t, for fullpath: String,
+             protocols: ProtocolInfo, protoRegex: String,
+             decider: @escaping (
+                _ proto: String, _ context: String,
+                _ type: String, _ protocols: ProtocolInfo)
+             -> String) -> [Patch] {
     var patches = [Patch]()
 
     sourceKit.recurseOver(childID: sourceKit.structureID,
@@ -170,18 +184,11 @@ func process(syntax: sourcekitd_variant_t,
         let offset = node.getInt(key: sourceKit.offsetID)
         if let kind = node.getUUIDString(key: sourceKit.kindID),
            let type = node.getString(key: sourceKit.typenameID),
-           let proto: String = type[protoRegexp] {
-            // Elide this parameter to some?
-            let prefix = kind[#"parameter$"#] &&
-                // Not inside a container or closure
-                !type[proto+#"[\]>?]|\)(?:throws )? ->"#] &&
-                // and not for a system protocol
-                protocols[proto]?.hasPrefix("$ss") != true &&
-                protocols[proto]?.hasPrefix("$sS") != true &&
-                protocols[proto]?.hasPrefix("$s10Foundation") != true &&
-                protocols[proto]?.hasPrefix("$s7Combine") != true ?
-                "some " : "any "
-            patches.append((offset, (proto, prefix+"$1")))
+           let proto: String = type[protoRegex] {
+            // Elide this parameter to some/any?
+            let prefix = decider(proto, kind, type, protocols)
+            patches.append((offset: offset, (
+                             from: proto, to: prefix+"$1")))
         }
     }
 
@@ -189,7 +196,9 @@ func process(syntax: sourcekitd_variant_t,
     return patches
 }
 
-func apply(patches: [Patch], to file: String) -> String? {
+func apply(patches: [Patch], for file: String, applier:
+    (_ line: inout String,
+     _ patch: Replace) -> ()) -> String? {
     guard let data = NSMutableData(contentsOfFile: file) else {
         return nil
     }
@@ -199,10 +208,6 @@ func apply(patches: [Patch], to file: String) -> String? {
 
     let bytes = UnsafeMutablePointer<CChar>(mutating:
         data.bytes.assumingMemoryBound(to: CChar.self))
-    let notPreceededBy =
-        #"any |some |protocol |extension |& |\.|<"#
-        .components(separatedBy: #"|"#)
-        .map { #"(?<!\#($0))"# }.joined()
 
     var parts = [String]() // apply patches in reverse order
     for (offset, patch) in patches.sorted(by: { $0.0 > $1.0 }) {
@@ -215,88 +220,23 @@ func apply(patches: [Patch], to file: String) -> String? {
         
         let before = String(cString: bytes)
         guard !before[#"<\#(patch.from): "#] else { continue }
-        func stage(_ s: String) {
-//            print(s, lines[0])
-        }
-
-        stage("\n111111111111")
-        // patch in prefix (once)
-        let ident = #"\b((?:\w+\.)?"# + patch.from + #")"#
-        lines[0][notPreceededBy + ident +
-                 #"\b(?![:(]|>\(|\s+\{\}|\.self)"#]
-            = [patch.to]
-        
-        stage("22222222222222")
-        // Swift.Error
-        lines[0][#"\b(\w+\.)((?:any|some)\s+)(?=\#(ident))"#]
-            = [("$2", "$1")]
-        
-        stage("33333333333333")
-        // fix up optional syntax
-        lines[0][#"\b((?:any|some)(\s+\#(ident)))([?!])"#]
-            = ["(any$2)$4"]
-
-        stage("44444444444444")
-        // a few special cases
-        lines[0][#"(some (\#(ident)\s*))(?=\.\.\.| =|\.Type|\) in)"#]
-            = ["any $2"]
-        stage("55555555555555")
+        applier(&lines[0], patch)
     }
 
     parts.append(String(cString: bytes))
     return parts.reversed().joined()[#"some some"#, "some"]
 }
 
-typealias AnyError = (line: Int, col: Int, proto: String)
+typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
 
-func extractAnyErrors(project: URL, xcode: String)
-    -> [String: [AnyError]] {
-    let xcbuild =
-            "\(xcode)/Contents/Developer/usr/bin/xcodebuild"
-    let rebuild = project
-        .lastPathComponent == "Package.swift" ? """
-        rm -rf .build && \(xcode)/Contents/Developer/\
-        Toolchains/XcodeDefault.xctoolchain/usr/bin/\
-        swift build -Xswiftc -enable-upcoming-feature \
-        -Xswiftc ExistentialAny 2>&1 | sort -u
-        """ : """
-        \(xcbuild) OTHER_SWIFT_FLAGS=\
-        '-DDEBUG -enable-upcoming-feature ExistentialAny' \
-        2>&1 | tee -a /tmp/rebuild.txt
-        """
-    guard let stdout = popen("""
-        cd \"\(project.deletingLastPathComponent().path)\" &&
-        """+rebuild, "r") else {
-        print("⚠️ Rebuild failed: \(rebuild)")
-        return [:]
-    }
-
-    var out = [String: [AnyError]]()
-    while let line = stdout.readLine() {
-        if let (file, line, char, proto):
-            (String, String, String, String) =
-            line[#"^([^:]+):(\d+):(\d+): "# +
-                 #"error: use of protocol '([^']+)'"#] {
-            out[file, default: []].append(
-                (Int(line) ?? 0, Int(char) ?? 0, proto))
-        }
-    }
-
-    return out
-}
-
-func addressErrors(file: String, patches: [AnyError]) -> String? {
+func addressErrors(file: String, patches: [ErrorPatch]) -> String? {
     guard var source = try? String(contentsOfFile: file) else {
         print("Could not open file: \(file)")
         return nil
     }
 
     for patch in patches.sorted(by: { $0.line > $1.line }) {
-        let offset = "^(?:.*\n){\(patch.line-1)}" +
-                          ".{\(patch.col-1)}.*?"
-        let change = "(?<!any )(?<!some )(\(patch.proto))"
-        source[offset+change] = ["any $1"]
-        source[#"(any \#(patch.proto))\#\?"#] = "($1)"
+        source[patch.replace.from] = [patch.replace.to]
     }
 
     return source
