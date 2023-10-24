@@ -31,6 +31,10 @@ Usage is:
 This project is an experiment on a "best effort"
 basis but hopefully it should save you `some` typing.
 
+The project now contains an app target "Unbreak" which you can
+run to invoke the script binary for you. Open your package's
+Package.swift and press the "Prepare for Swift 6" button.
+
 The project has been extended to support Xcode .xcproject files
 instead of just Swift packages. Testing with NetNewsWire has
 shown your millage may vary quite a bit but the recipe I found

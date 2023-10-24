@@ -9,8 +9,20 @@
 //
 
 import Foundation
-import Fortify
-import Popen
+// Defines a subscript of a string by a raw
+// string which is interpreted as a regex.
+import SwiftRegex // See https://github.com/johnno1962/SwiftRegex5
+/** Some examples:
+var numbers = "phone: 555 666-1234 fax: 555 666-4321"
+
+if let match: (String, String, String) = numbers["(\\d+) (\\d+)-(\\d+)"] {
+    XCTAssert(match == ("555", "666","1234"), "single match")
+}
+numbers["(\\d+) (\\d+)-(\\d+)"] = [("555", "777", "1234")]
+XCTAssertEqual(numbers, "phone: 555 777-1234 fax: 555 666-4321")
+ **/
+import Fortify // Catch fatal errors and stack trace
+import Popen // To read lines from the build process.
 
 extension Date {
     static var nowInterval: TimeInterval {
@@ -46,15 +58,15 @@ func someAnyPolicy(proto: String, context: String,
         protocols[proto]?.hasPrefix("$sS") != true &&
         protocols[proto]?.hasPrefix("$s7Combine") != true &&
         protocols[proto]?.hasPrefix("$s10Foundation") != true
-    return context.hasSuffix("parameter") &&
+    return type[proto+#">"#] ? "" :
+        context.hasSuffix("parameter") &&
         // Not inside a container or closure
         !type[proto+#"[\]>?]|\)(?:throws )? ->"#] &&
         // and never `some` for a system protocol
         // to avoid breaking common conformances.
-        notSystemProtocol ? "some " :
+        notSystemProtocol //|| proto == "Error"
         // Package pointfreeco/swift-overture
-        type[proto+#">"#] ? "" :
-        "any "
+        ? "some " : "any "
 }
 
 
