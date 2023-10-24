@@ -86,6 +86,26 @@ func fixOptionals(source: inout String, protoRegex: String) {
     source[#"\b((?:any|some)(\s+\#(optional)))([?!])"#] = "(any $3)$5"
 }
 
+func adhocFixes(source: inout String, protoRegex: String) {
+    // A few ad-hoc patches improve the odds.
+    // is/as seems to get missed by the syntax tree
+    let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?"# +
+        protoRegex + #"(?:\.Type)?)(?![:])"#
+    source[cast] = "$1any $2"
+
+    // "constrained to non-protocol, non-class type"
+    source[#"<\w+:( any) "#] = ""
+
+    for _ in 1...5 {
+        // @objc or cases cannot have generic params
+        // allow "case .some" though
+        source[#"(?:@objc|\bcase)\s+[^)]*[^\.]\b(some)\b"#] = "any"
+    }
+
+    fixOptionals(source: &source, protoRegex: protoRegex)
+}
+
+// regex matching any known protocol identifier
 func protocolRegex(protocols: ProtocolInfo) -> String {
     return #"\b("#+protocols.keys.joined(separator: "|") +
         #"|NS\w+(?:Delegate|Provider|InterfaceItem))\b"#
@@ -117,20 +137,7 @@ func opaqueify(argv: [String]) {
            var patched = apply(patches: patches, for: file,
                                applier: sourcePatcher) {
 
-            // A couple of ad-hoc patches improve the odds.
-            // is/as seems to get missed by the syntax tree
-            let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?"# +
-                protoRegex + #"(?:\.Type)?)(?![:])"#
-            patched[cast] = "$1any $2"
-
-            for _ in 1...5 {
-                // @objc or cases cannot have generic params
-                // allow "case .some" though
-                patched[#"(?:@objc|\bcase)\s+[^)]*[^\.]\b(some)\b"#]
-                    = "any"
-            }
-
-            fixOptionals(source: &patched, protoRegex: protoRegex)
+            adhocFixes(source: &patched, protoRegex: protoRegex)
 
             try! patched.write(toFile: file,
                                atomically: true, encoding: .utf8)
@@ -146,27 +153,34 @@ func opaqueify(argv: [String]) {
     }
 }
 
-func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
+let stagePhaseOnce: () = {
+    let project = URL(fileURLWithPath: argv[0])
     _ = pclose(popen("""
         cd "\(project.deletingLastPathComponent().path)"; \
         mv .build .. 2>/dev/null; git add .; mv ../.build . 2>/dev/null
         """, "w"))
+}()
+
+func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
 
     for _ in 1...5 {
         print("Rebuilding to verify.."); fflush(stdout)
         let phaseTwo = extractAnyErrors(project: project, xcode: xcode,
                                         protocols: &protocols)
         let protoRegex = protocolRegex(protocols: protocols)
+        var packagesToVerify = Set<String>()
 
         var fixups = 0
         for (file, patches) in phaseTwo {
+            _ = stagePhaseOnce
             if var patched = addressErrors(file: file, patches: patches) {
                 fixOptionals(source: &patched, protoRegex: protoRegex)
                 
-                if file.contains("/checkouts/") {
+                if let package: String = file[#"^.*/checkouts/[^/]+"#] {
                     print("Having to patch file in dependency:",
                           file, patches)
                     chmod(file, 0o644)
+                    packagesToVerify.insert(package+"/Package.swift")
                 }
                 try! patched.write(toFile: file,
                     atomically: true, encoding: .utf8)
@@ -174,6 +188,12 @@ func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
             fixups += patches.count
 //            print(reedits, file, patches)
         }
+
+//        for package in packagesToVerify {
+//            print("Sub-verifying", package)
+//            verify(project: URL(fileURLWithPath: package),
+//                   xcode: xcode, protocols: &protocols)
+//        }
 
         print(fixups, "fixups after", Date.nowInterval-start, "seconds")
         if fixups == 0 {
