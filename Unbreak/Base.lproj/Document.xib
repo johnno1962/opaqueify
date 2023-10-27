@@ -8,14 +8,16 @@
     <objects>
         <customObject id="-2" userLabel="File's Owner" customClass="Document" customModule="Unbreak" customModuleProvider="target">
             <connections>
+                <outlet property="open" destination="eaJ-Ck-Yzr" id="v8e-0w-aRu"/>
+                <outlet property="process" destination="VFu-Gc-hxv" id="sVd-Ce-mhI"/>
                 <outlet property="progress" destination="gkY-R0-CUU" id="IeR-aG-nwW"/>
                 <outlet property="webView" destination="FKZ-sY-WGP" id="DFO-xo-f58"/>
                 <outlet property="window" destination="xOd-HO-29H" id="JIz-fz-R2o"/>
             </connections>
         </customObject>
         <customObject id="-1" userLabel="First Responder" customClass="FirstResponder"/>
-        <customObject id="-3" userLabel="Application"/>
-        <window title="Window" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" animationBehavior="default" id="xOd-HO-29H" userLabel="Window">
+        <customObject id="-3" userLabel="Application" customClass="NSObject"/>
+        <window title="Window" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" animationBehavior="default" id="xOd-HO-29H" userLabel="Window">
             <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES"/>
             <windowPositionMask key="initialPositionMask" leftStrut="YES" rightStrut="YES" topStrut="YES" bottomStrut="YES"/>
             <rect key="contentRect" x="133" y="235" width="507" height="413"/>
@@ -44,7 +46,7 @@
                             <action selector="openProject:" target="-2" id="gKw-ae-9Eg"/>
                         </connections>
                     </button>
-                    <wkWebView wantsLayer="YES" fixedFrame="YES" id="FKZ-sY-WGP">
+                    <wkWebView wantsLayer="YES" id="FKZ-sY-WGP">
                         <rect key="frame" x="20" y="20" width="467" height="333"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <wkWebViewConfiguration key="configuration">
@@ -56,7 +58,7 @@
                             <outlet property="navigationDelegate" destination="-2" id="Mxs-gs-sub"/>
                         </connections>
                     </wkWebView>
-                    <progressIndicator fixedFrame="YES" maxValue="100" indeterminate="YES" controlSize="small" style="spinning" translatesAutoresizingMaskIntoConstraints="NO" id="gkY-R0-CUU">
+                    <progressIndicator fixedFrame="YES" maxValue="100" indeterminate="YES" controlSize="small" style="spinning" id="gkY-R0-CUU">
                         <rect key="frame" x="287" y="375" width="16" height="16"/>
                         <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     </progressIndicator>
@@ -69,6 +71,17 @@
                         </buttonCell>
                         <connections>
                             <action selector="processProject:" target="-2" id="9am-3f-mIX"/>
+                        </connections>
+                    </button>
+                    <button verticalHuggingPriority="750" id="umD-pn-wwo">
+                        <rect key="frame" x="425" y="366" width="69" height="32"/>
+                        <autoresizingMask key="autoresizingMask" flexibleMinX="YES" flexibleMinY="YES"/>
+                        <buttonCell key="cell" type="push" title="Stash" bezelStyle="rounded" alignment="center" borderStyle="border" imageScaling="proportionallyDown" inset="2" id="hrW-6d-cyc">
+                            <behavior key="behavior" pushIn="YES" lightByBackground="YES" lightByGray="YES"/>
+                            <font key="font" metaFont="system"/>
+                        </buttonCell>
+                        <connections>
+                            <action selector="stashProject:" target="-2" id="qI2-5F-Uav"/>
                         </connections>
                     </button>
                 </subviews>

@@ -19,6 +19,10 @@ import SourceKitHeader
 
 let sourceKit = SourceKit(logRequests: false)
 
+let stagePhaseOnce: () = {
+//    print(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
+}()
+
 func extract(build: String) -> [String] {
     guard let stdout = popen(build, "r") else {
         print("⚠️ Could not launch \(build)")
@@ -32,7 +36,9 @@ func extract(build: String) -> [String] {
         }
     }
 
-    _ = pclose(stdout)
+    if pclose(stdout) >> 8 != EXIT_SUCCESS {
+        print("⚠️ Build failed: \(build)")
+    }
     return commands
 }
 
@@ -61,10 +67,7 @@ func build(project: URL, xcode: String? = nil) -> [String] {
         build = "\(xcbuild) clean; \(xcbuild) -project \(project.lastPathComponent)"
     }
 
-    let root = project.deletingLastPathComponent().path
-    return extract(build: """
-        cd "\(root)" && \(build) 2>&1 | /usr/bin/tee /tmp/build.txt
-        """)
+    return extract(build: "\(build) 2>&1 | /usr/bin/tee /tmp/build.txt")
 }
 
 var argumentsToRemove = Set([
@@ -84,52 +87,69 @@ func extractProtocols(from project: URL, commands: [String])
             .resourceValues(forKeys: [.canonicalPathKey])
             .canonicalPath,
           let enumerator = FileManager.default.enumerator(atPath: root) else {
-        fatalError("⚠️ Bad path to project: \(project)")
+        fatalError("⚠️ Bad path to project \(project)")
     }
+
+//    var primaryFiles = Set<String>()
+//    for command in commands {
+//        for primaryFile: String in command[#"-primary-file (\S+\.swift) "#] {
+//            primaryFiles.insert(primaryFile)
+//            if let source = try? String(contentsOfFile: primaryFile) {
+//                for proto: String in
+//                    source[#"\bprotocol\s+(\w+)\b"#]
+//                    where protocolInfo[proto] == nil {
+//                    protocolInfo[proto] = primaryFile
+//                }
+//            }
+//        }
+//    }
 
     for relative in enumerator {
         guard let relative = relative as? String else { continue }
-        let fullpath = URL(fileURLWithPath: relative,
+        let fullURL = URL(fileURLWithPath: relative,
             relativeTo: URL(fileURLWithPath: root))
-        guard fullpath.path.hasSuffix(".swift") else {
+        guard fullURL.path.hasSuffix(".swift") else {
             continue
         }
 
-        if let source = try? String(contentsOfFile: fullpath.path) {
+        if let source = try? String(contentsOfFile: fullURL.path) {
             for proto: String in
                 source[#"\bprotocol\s+(\w+)\b"#]
                 where protocolInfo[proto] == nil {
-                protocolInfo[proto] = fullpath.path
+                protocolInfo[proto] = fullURL.path
             }
         }
 
-        let resp = sourceKit.syntaxMap(filePath: fullpath.path, subSyntax: true)
+        let resp = sourceKit.syntaxMap(filePath: fullURL.path, subSyntax: true)
 //        SKApi.response_description_dump(resp)
         let dict = SKApi.response_get_value(resp)
-        fileSyntax[fullpath.path] = dict
+        fileSyntax[fullURL.path] = dict
 
         guard var command = commands.first(where: {
-            $0.contains(" -primary-file \(fullpath.path) ") }) else {
-            if !fullpath.path[#"/Tests/|\.build/|Examples?/"#] {
-                print("Missing compiler args for \(fullpath.path)")
+            $0.contains(" -primary-file \(fullURL.path) ") }) else {
+            if !fullURL.path[#"/Tests/|\.build/|Examples?/"#] {
+                print("Missing compiler args for \(fullURL.path)")
             }
             continue
         }
 
-        print("Processing", fullpath.relativePath,
+        print("Processing", fullURL.relativePath,
               protocolInfo.count, "protocols"); fflush(stdout)
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
+            return // no longer use Cursor-Info (QuickLook) requests
             let offset = node.getInt(key: sourceKit.offsetID)
 
             while node.getString(key: sourceKit.typenameID) != nil {
                 command[""+argumentsToRemove
                     .joined(separator: "|")] = ""
 
-                let options = Array(command.components(
+                let args = Array(command.components(
                     separatedBy: " ").dropFirst(2))
 
-                let info = sourceKit.cursorInfo(filePath: fullpath.path, byteOffset: Int32(offset), compilerArgs: sourceKit.array(argv: options))
+                let info = sourceKit.cursorInfo(filePath:
+                    fullURL.path, byteOffset: Int32(offset),
+                    compilerArgs: sourceKit.array(argv: args))
                 if let error = sourceKit.error(resp: info) {
                     let toRemove = argumentsToRemove.count
                     for argh: String in error[
@@ -147,8 +167,10 @@ func extractProtocols(from project: URL, commands: [String])
                     print(error)
                     break
                 }
+
                 let dict = SKApi.response_get_value(info)
-                if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ?? node.getString(key: sourceKit.annotatedID),
+                if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ??
+                               dict.getString(key: sourceKit.annotatedID),
                    notes.contains("ref.protocol") {
 //                    print(notes)
                     for (usr, name): (String, String) in notes[
@@ -231,7 +253,7 @@ typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
 
 func addressErrors(file: String, patches: [ErrorPatch]) -> String? {
     guard var source = try? String(contentsOfFile: file) else {
-        print("Could not open file: \(file)")
+        print("⚠️ Could not read file: \(file)")
         return nil
     }
 

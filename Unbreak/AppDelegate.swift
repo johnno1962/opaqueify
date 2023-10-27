@@ -16,6 +16,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Insert code here to initialize your application
     }
 
+    @IBAction func openFile(_ sender: Any) {
+        let open = NSOpenPanel()
+        open.prompt = "Select Project File"
+        open.canChooseDirectories = false
+        open.canChooseFiles = true
+        if open.runModal() == .OK,
+           let url = open.url {
+            if let doc = try? Document(contentsOf: url, ofType:
+                                        url.lastPathComponent),
+               let nib = doc.windowNibName {
+                Bundle.main.loadNibNamed(nib, owner: doc,
+                                         topLevelObjects: nil)
+                doc.webView.window?.title = url.lastPathComponent
+                doc.webView.window?.representedURL = url
+                NSDocumentController.shared.addDocument(doc)
+            }
+        }
+    }
+
     func applicationWillTerminate(_ aNotification: Notification) {
         // Insert code here to tear down your application
     }

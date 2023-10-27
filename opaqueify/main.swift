@@ -23,6 +23,7 @@ XCTAssertEqual(numbers, "phone: 555 777-1234 fax: 555 666-4321")
  **/
 import Fortify // Catch fatal errors and stack trace
 import Popen // To read lines from the build process.
+import Cocoa
 
 extension Date {
     static var nowInterval: TimeInterval {
@@ -35,12 +36,13 @@ let argv = CommandLine.arguments
 
 guard argv.count > 1 else {
     print("Usage: \(argv[0]) <project>")
-    exit(1)
+    exit(EXIT_FAILURE)
 }
 
 do {
     try Fortify.protect {
         opaqueify(argv: argv)
+        exit(EXIT_SUCCESS)
     }
 } catch {
     print("""
@@ -48,6 +50,7 @@ do {
         https://github.com/johnno1962/opaqueify with this debug \
         information along with the URL of the repo if possible.
         """)
+    exit(EXIT_FAILURE)
 }
 
 // Criterion for chosing some over any
@@ -58,14 +61,15 @@ func someAnyPolicy(proto: String, context: String,
         protocols[proto]?.hasPrefix("$sS") != true &&
         protocols[proto]?.hasPrefix("$s7Combine") != true &&
         protocols[proto]?.hasPrefix("$s10Foundation") != true
-    return type[proto+#">"#] ? "" :
+    // Package pointfreeco/swift-overture
+    return //type[proto+#">"#] ||
+        objc_getClass(proto) != nil ? "" :
         context.hasSuffix("parameter") &&
         // Not inside a container or closure
         !type[proto+#"[\]>?]|\)(?:throws )? ->"#] &&
         // and never `some` for a system protocol
         // to avoid breaking common conformances.
         notSystemProtocol //|| proto == "Error"
-        // Package pointfreeco/swift-overture
         ? "some " : "any "
 }
 
@@ -126,6 +130,8 @@ func protocolRegex(protocols: ProtocolInfo) -> String {
 // Policy factored out, the script starts here..
 func opaqueify(argv: [String]) {
     let project = URL(fileURLWithPath: argv[1])
+    chdir(project.deletingLastPathComponent().path)
+
     // First build the package so we can determine
     // the Swift compiler arguments for SourceKit.
     let commands = build(project: project)
@@ -161,24 +167,17 @@ func opaqueify(argv: [String]) {
 
     // Second pass, uses compiler errors for fixups..
     if argv.count > 2 {
-        verify(project: project, xcode: argv[2], protocols: &protocols)
+        verify(project: project, xcode: argv[2],
+               protocols: &protocols, commands: commands)
     }
 }
 
-let stagePhaseOnce: () = {
-    let project = URL(fileURLWithPath: argv[0])
-    _ = pclose(popen("""
-        cd "\(project.deletingLastPathComponent().path)"; \
-        mv .build .. 2>/dev/null; git add .; mv ../.build . 2>/dev/null
-        """, "w"))
-}()
-
-func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
-
-    for _ in 1...5 {
+func verify(project: URL, xcode: String,
+            protocols: inout ProtocolInfo, commands: [String]) {
+    for _ in 1...10 {
         print("Rebuilding to verify.."); fflush(stdout)
         let phaseTwo = extractAnyErrors(project: project, xcode: xcode,
-                                        protocols: &protocols)
+            protocols: &protocols, commands: commands)
         let protoRegex = protocolRegex(protocols: protocols)
         var packagesToVerify = Set<String>()
 
@@ -188,13 +187,13 @@ func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
             if var patched = addressErrors(file: file, patches: patches) {
                 fixOptionals(source: &patched, protoRegex: protoRegex)
                 
-                if let package: String = file[#"^.*/checkouts/[^/]+"#] {
+                if let package: String = file[#"^.*\.build/checkouts/[^/]+"#] {
                     print("Having to patch file in dependency:",
                           file, patches)
                     chmod(file, 0o644)
                     packagesToVerify.insert(package+"/Package.swift")
                 }
-                try! patched.write(toFile: file,
+                try? patched.write(toFile: file,
                     atomically: true, encoding: .utf8)
             }
             fixups += patches.count
@@ -207,39 +206,91 @@ func verify(project: URL, xcode: String, protocols: inout ProtocolInfo) {
 //                   xcode: xcode, protocols: &protocols)
 //        }
 
-        print(fixups, "fixups after", Date.nowInterval-start, "seconds")
         if fixups == 0 {
+            print("Completed fixups after", Date.nowInterval-start, "seconds")
             break
         }
+        print(fixups, "fixups after", Date.nowInterval-start, "seconds")
     }
 }
 
-func extractAnyErrors(project: URL, xcode: String, protocols: inout ProtocolInfo)
+func extractAnyErrors(project: URL, xcode: String,
+    protocols: inout ProtocolInfo, commands: [String])
     -> [String: [ErrorPatch]] {
-    let xcbuild =
-            "\(xcode)/Contents/Developer/usr/bin/xcodebuild"
-    let rebuild = project
+    let name = (project.lastPathComponent == "Package.swift" ?
+                project.deletingLastPathComponent() :
+                project.deletingPathExtension()).lastPathComponent,
+        log = "\"/tmp/rebuild_\(name).txt\"", xcbuild =
+            "\(xcode)/Contents/Developer/usr/bin/xcodebuild",
+        rebuild = project
         .lastPathComponent == "Package.swift" ? """
         \(xcode)/Contents/Developer/\
         Toolchains/XcodeDefault.xctoolchain/usr/bin/\
         swift build -Xswiftc -enable-upcoming-feature \
         -Xswiftc ExistentialAny
         """ : """
-        \(xcbuild) -project \(project.lastPathComponent) OTHER_SWIFT_FLAGS=\
-        '-DDEBUG -enable-upcoming-feature ExistentialAny'
+        \(xcbuild) OTHER_SWIFT_FLAGS=\
+        '-DDEBUG -enable-upcoming-feature ExistentialAny' \
+        -project \(project.lastPathComponent)
         """
-    guard let stdout = popen("""
-        cd \"\(project.deletingLastPathComponent().path)\" &&
-        """+rebuild+" 2>&1 | tee /tmp/rebuild.txt | sort -u", "r") else {
-        print("⚠️ Rebuild failed: \(rebuild)")
+    guard let stdout = popen(rebuild+"""
+            >\(log) 2>&1; STATUS=$?; sort -u \(log); exit $STATUS
+            """, "r") else {
+        print("⚠️ Could not open rebuild: \(rebuild)")
         return [:]
     }
 
     var out = [String: [ErrorPatch]]()
+    _ = parseErrors(stdout: stdout, protocols: &protocols, out: &out)
+
+    if pclose(stdout) >> 8 != EXIT_SUCCESS,
+        project.lastPathComponent != "Package.swift" {
+        print("ℹ️ xcodebuild failed: \(rebuild)")
+        fallbackBuild(using: commands, log: log,
+                      protocols: &protocols, out: &out)
+    }
+
+    return out
+}
+
+func fallbackBuild(using commands: [String], log: String,
+                   protocols: inout ProtocolInfo,
+                   out: inout [String: [ErrorPatch]]) {
+    for var command in commands {
+        command[#"builtin-swiftTaskExecution -- "#] = ""
+        command[#"( -c) "#] =
+            "$1 -enable-upcoming-feature ExistentialAny"
+        command[#"Bridging-Header-swift_(\w+)"#] = "*"
+        command[#"-frontend-parseable-output "#] = ""
+        command += " 2>&1 | tee -a \(log)"
+        for _ in 1...3 {
+            if let stdout = popen(command, "r") {
+                defer { _ = pclose(stdout) }
+                if parseErrors(stdout: stdout,
+                               protocols: &protocols, out: &out) {
+                    _ = stagePhaseOnce
+                    break
+                }
+            }
+        }
+    }
+}
+
+func parseErrors(stdout: UnsafeMutablePointer<FILE>,
+                 protocols: inout ProtocolInfo,
+                 out: inout [String: [ErrorPatch]]) -> Bool {
     while let output = stdout.readLine() {
+        if let (path, before, after):
+            (String, String, String) = output[
+            #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#] {
+            print(Popen.system("/bin/bash -xc '/bin/ln -s \(before)*\(after) \(path)'") ??
+                  "⚠️ Linking PCH failed")
+            return false
+        }
         if let (file, line, col): (String, String, String) =
-            output[#"^([^:]+):(\d+):(\d+): error: "#],
+            output[#"^([^:]+):(\d+)(?::(\d+))?: error: "#],
             let line = Int(line), let col = Int(col) {
+
             let offset = "^(?:.*\n){\(line-1)}" +
                           ".{\(max(col-20,1))}.*?"
             let once = #"(?<!any )(?<!some )"#
@@ -266,12 +317,11 @@ func extractAnyErrors(project: URL, xcode: String, protocols: inout ProtocolInfo
                 output[#"initializer does not override a designated initializer"#] {
                 let change = "[^)]+ (some) "
                 out[file, default: []].append((line, col,
-                   (from: offset+once+change, to: "any")))
+                    (from: offset+once+change, to: "any")))
             } else {
                 print(output)
             }
         }
     }
-
-    return out
+    return true
 }
