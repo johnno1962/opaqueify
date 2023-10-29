@@ -6,14 +6,17 @@
 //
 
 import Cocoa
-import WebKit
 import Popen
+import WebKit
+import SwiftRegex
 
 class Document: NSDocument, WKUIDelegate, WKNavigationDelegate {
 
     @IBOutlet var webView: WKWebView!
     @IBOutlet var progress: NSProgressIndicator!
-    var running: UnsafeMutablePointer<FILE>?
+
+    var xcode = "/Applications/Xcode.app"
+    var running: Popen?
 
     override init() {
         super.init()
@@ -34,65 +37,85 @@ class Document: NSDocument, WKUIDelegate, WKNavigationDelegate {
 
     @IBAction func stashProject(_ sender: Any?) {
         guard let project = fileURL else { return }
-        NSLog(Popen.system("""
+        output(cmd: """
             cd "\(project.deletingLastPathComponent().path)"; git stash
-            """) ?? "⚠️ Stash error: \(project)")
+            """)
     }
 
     @IBAction func processProject(_ button: NSButton) {
-        webView.window!.representedURL = fileURL
-        if let script = Bundle.main.path(forResource: "opaqueify", ofType: nil),
-           let project = fileURL {
-            if button.title == "Cancel" {
+        if let project = fileURL {
+            if running != nil {
                 button.title = "Prepare for Swift 6"
+                _ = running?.terminatedOK()
                 progress.stopAnimation(nil)
                 progress.isHidden = true
-                _ = pclose(running)
                 running = nil
                 return
             }
+            
+            let prepare = button.title
             progress.isHidden = false
             progress.startAnimation(nil)
             webView.evaluateJavaScript(
                 "append(\(["Building to generate logs..\n"]))")
-            if let stdout = popen("""
-                \(script) \(project.path) /Applications/Xcode.app 2>&1
-                """, "r") {
-                self.running = stdout
+            
+            if let script = Bundle.main.path(
+                forResource: "opaqueify", ofType: nil) {
                 button.title = "Cancel"
-                DispatchQueue.global().async {
-                    while let line = stdout.readLine() {
-                        let line = line
-                            .replacingOccurrences(of: "&", with: "&amp;")
-                            .replacingOccurrences(of: "<", with: "&lt;")
-                            .replacingOccurrences(of: "^/[^:]+",
-                                with: "<a href='file://$0'>$0</a>",
-                                options: .regularExpression)
-                        DispatchQueue.main.async {
-                            self.webView.evaluateJavaScript(
-                                "append.apply(null, \([line+"\n"]))")
-                        }
-                    }
-
-                    _ = pclose(stdout)
-
-                    DispatchQueue.main.async {
+                    output(cmd: """
+                        "\(script)" "\(project.path)" "\(xcode)" 2>&1
+                        """) {
                         self.progress.stopAnimation(nil)
                         self.progress.isHidden = true
                         button.isEnabled = true
-                    }
+                        button.title = prepare
                 }
             }
+        }
+    }
+
+    func output(cmd: String, completion: @escaping () -> () = {}) {
+        running = Popen(cmd: cmd)
+        guard let running = running else { return }
+        DispatchQueue.global().async {
+            for line in running {
+                let line = line
+                    .replacingOccurrences(of: "&", with: "&amp;")
+                    .replacingOccurrences(of: "<", with: "&lt;")
+                    .replacingOccurrences(of: "^/[^:]+",
+                                          with: "<a href='#$0'>$0</a>",
+                                          options: .regularExpression)
+                DispatchQueue.main.async {
+                    self.webView.evaluateJavaScript(
+                        "append.apply(null, \([line+"\n"]))")
+                }
+            }
+
+            self.running = nil
+            DispatchQueue.main.async(execute: completion)
+        }
+    }
+
+    @IBAction func selectXcode(_ sender: Any) {
+        let open = NSOpenPanel()
+        open.prompt = "Select Xcode"
+        open.canChooseDirectories = false
+        open.canChooseFiles = true
+        if open.runModal() == .OK,
+           let url = open.url, url.pathExtension == "app" {
+            xcode = url.path()
         }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         if let url = navigationAction.request.url, url.isFileURL {
             if url.path.hasSuffix("Console.html") {
-                decisionHandler(.allow)
-            } else {
-                NSWorkspace.shared.open(url)
-                decisionHandler(.cancel)
+                if let path = url.fragment {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: path))
+                    decisionHandler(.cancel)
+                } else {
+                    decisionHandler(.allow)
+                }
             }
         }
     }

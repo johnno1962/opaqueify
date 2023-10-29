@@ -19,7 +19,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBAction func openFile(_ sender: Any) {
         let open = NSOpenPanel()
         open.prompt = "Select Project File"
-        open.canChooseDirectories = false
         open.canChooseFiles = true
         if open.runModal() == .OK,
            let url = open.url {

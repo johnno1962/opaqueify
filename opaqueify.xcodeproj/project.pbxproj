@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BB044C6D2AED0F71006B0CED /* ProtocolData.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB044C6C2AED0F71006B0CED /* ProtocolData.swift */; };
 		BB65F9642AE01F2900D41056 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9632AE01F2900D41056 /* main.swift */; };
 		BB65F9712AE0202B00D41056 /* SourceKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9702AE0202B00D41056 /* SourceKit.swift */; };
 		BB65F9732AE0551200D41056 /* Opaqueify.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB65F9722AE0551200D41056 /* Opaqueify.swift */; };
@@ -24,6 +25,9 @@
 		BB8B9A202AE7A46400A7B709 /* Popen in Frameworks */ = {isa = PBXBuildFile; productRef = BB8B9A1F2AE7A46400A7B709 /* Popen */; };
 		BB8B9A252AE7A4B800A7B709 /* Popen in Frameworks */ = {isa = PBXBuildFile; productRef = BB8B9A242AE7A4B800A7B709 /* Popen */; };
 		BB8B9A282AE7B04900A7B709 /* Fortify in Frameworks */ = {isa = PBXBuildFile; productRef = BB8B9A272AE7B04900A7B709 /* Fortify */; };
+		BBEA2DA02AEBF60700EA814A /* DLKit in Frameworks */ = {isa = PBXBuildFile; productRef = BBEA2D9F2AEBF60700EA814A /* DLKit */; };
+		BBEA2DA22AEBF60700EA814A /* DLKitC in Frameworks */ = {isa = PBXBuildFile; productRef = BBEA2DA12AEBF60700EA814A /* DLKitC */; };
+		BBEA2DC02AEC108300EA814A /* SwiftRegex in Frameworks */ = {isa = PBXBuildFile; productRef = BBEA2DBF2AEC108300EA814A /* SwiftRegex */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +67,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		BB044C6C2AED0F71006B0CED /* ProtocolData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProtocolData.swift; sourceTree = "<group>"; };
 		BB65F9602AE01F2900D41056 /* opaqueify */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = opaqueify; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB65F9632AE01F2900D41056 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		BB65F96E2AE0202B00D41056 /* sourcekitd.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sourcekitd.h; sourceTree = "<group>"; };
@@ -93,7 +98,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BBEA2DA22AEBF60700EA814A /* DLKitC in Frameworks */,
 				BB8B9A282AE7B04900A7B709 /* Fortify in Frameworks */,
+				BBEA2DA02AEBF60700EA814A /* DLKit in Frameworks */,
 				BB8B9A172AE7A40800A7B709 /* SwiftRegex in Frameworks */,
 				BB8B9A202AE7A46400A7B709 /* Popen in Frameworks */,
 			);
@@ -103,6 +110,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BBEA2DC02AEC108300EA814A /* SwiftRegex in Frameworks */,
 				BB8B9A252AE7A4B800A7B709 /* Popen in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -154,6 +162,7 @@
 			isa = PBXGroup;
 			children = (
 				BB65F96F2AE0202B00D41056 /* opaqueify-Bridging-Header.h */,
+				BB044C6C2AED0F71006B0CED /* ProtocolData.swift */,
 				BB65F9722AE0551200D41056 /* Opaqueify.swift */,
 				BB65F9702AE0202B00D41056 /* SourceKit.swift */,
 				BB65F96E2AE0202B00D41056 /* sourcekitd.h */,
@@ -221,6 +230,8 @@
 				BB8B9A162AE7A40800A7B709 /* SwiftRegex */,
 				BB8B9A1F2AE7A46400A7B709 /* Popen */,
 				BB8B9A272AE7B04900A7B709 /* Fortify */,
+				BBEA2D9F2AEBF60700EA814A /* DLKit */,
+				BBEA2DA12AEBF60700EA814A /* DLKitC */,
 			);
 			productName = opaqueify;
 			productReference = BB65F9602AE01F2900D41056 /* opaqueify */;
@@ -242,6 +253,7 @@
 			name = Unbreak;
 			packageProductDependencies = (
 				BB8B9A242AE7A4B800A7B709 /* Popen */,
+				BBEA2DBF2AEC108300EA814A /* SwiftRegex */,
 			);
 			productName = Unbreak;
 			productReference = BB7EE53B2AE6D62C000407AF /* Unbreak.app */;
@@ -290,7 +302,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1430;
+				LastSwiftUpdateCheck = 1510;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					BB65F95F2AE01F2900D41056 = {
@@ -322,6 +334,7 @@
 				BB8B9A152AE7A40800A7B709 /* XCRemoteSwiftPackageReference "SwiftRegex5" */,
 				BB8B9A1E2AE7A46400A7B709 /* XCRemoteSwiftPackageReference "Popen" */,
 				BB8B9A262AE7B04900A7B709 /* XCRemoteSwiftPackageReference "Fortify" */,
+				BBEA2D9E2AEBF60700EA814A /* XCRemoteSwiftPackageReference "DLKit" */,
 			);
 			productRefGroup = BB65F9612AE01F2900D41056 /* Products */;
 			projectDirPath = "";
@@ -372,6 +385,7 @@
 				BB65F9732AE0551200D41056 /* Opaqueify.swift in Sources */,
 				BB65F9642AE01F2900D41056 /* main.swift in Sources */,
 				BB65F9712AE0202B00D41056 /* SourceKit.swift in Sources */,
+				BB044C6D2AED0F71006B0CED /* ProtocolData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -760,7 +774,7 @@
 			repositoryURL = "https://github.com/johnno1962/Popen.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 1.2.4;
+				minimumVersion = 2.0.0;
 			};
 		};
 		BB8B9A262AE7B04900A7B709 /* XCRemoteSwiftPackageReference "Fortify" */ = {
@@ -769,6 +783,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.1.5;
+			};
+		};
+		BBEA2D9E2AEBF60700EA814A /* XCRemoteSwiftPackageReference "DLKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/johnno1962/DLKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.2.2;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -793,6 +815,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BB8B9A262AE7B04900A7B709 /* XCRemoteSwiftPackageReference "Fortify" */;
 			productName = Fortify;
+		};
+		BBEA2D9F2AEBF60700EA814A /* DLKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BBEA2D9E2AEBF60700EA814A /* XCRemoteSwiftPackageReference "DLKit" */;
+			productName = DLKit;
+		};
+		BBEA2DA12AEBF60700EA814A /* DLKitC */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BBEA2D9E2AEBF60700EA814A /* XCRemoteSwiftPackageReference "DLKit" */;
+			productName = DLKitC;
+		};
+		BBEA2DBF2AEC108300EA814A /* SwiftRegex */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BB8B9A152AE7A40800A7B709 /* XCRemoteSwiftPackageReference "SwiftRegex5" */;
+			productName = SwiftRegex;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

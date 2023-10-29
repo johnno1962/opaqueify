@@ -13,6 +13,7 @@ import Foundation
 // string which is interpreted as a regex.
 import SwiftRegex // See https://github.com/johnno1962/SwiftRegex5
 import Popen // To read lines from the build process.
+import DLKit // To determine system protocols.
 #if SWIFT_PACKAGE
 import SourceKitHeader
 #endif
@@ -24,19 +25,19 @@ let stagePhaseOnce: () = {
 }()
 
 func extract(build: String) -> [String] {
-    guard let stdout = popen(build, "r") else {
+    guard let stdout = Popen(cmd: build) else {
         print("⚠️ Could not launch \(build)")
         return []
     }
 
     var commands = [String]()
-    while let line = stdout.readLine() {
+    for line in stdout {
         if line.contains(" -primary-file ") {
             commands.append(line)
         }
     }
 
-    if pclose(stdout) >> 8 != EXIT_SUCCESS {
+    if !stdout.terminatedOK() {
         print("⚠️ Build failed: \(build)")
     }
     return commands
@@ -46,15 +47,30 @@ func lastLog(project: URL) -> String? {
     let projectName = project
         .deletingPathExtension().lastPathComponent
     let search = "ls -t ~/Library/Developer/Xcode/DerivedData/\(projectName)-*/Logs/Build/*.xcactivitylog"
-    guard let logs = popen(search, "r"),
+    guard let logs = Popen(cmd: search),
           let log = logs.readLine() else {
         print("⚠️ Could not find logs using: \(search)")
         return nil
     }
 
-    _ = pclose(logs)
     return log
 }
+
+import Cocoa
+
+let CocoaProtocols = {
+    _ = NSWindow() // force load of Cocoa
+    var names = [String: String]()
+    "_OBJC_PROTOCOL_$_".withCString { prefix in
+        let len = strlen(prefix)
+        for entry in DLKit.allImages
+            .entries(withPrefix: prefix) {
+            names[String(cString: entry.name+len)]
+                = entry.imageNumber.imageKey
+        }
+    }
+    return names
+}()
 
 func build(project: URL, xcode: String? = nil) -> [String] {
     let build: String
@@ -81,15 +97,14 @@ typealias ProtocolInfo = [String: String]
 
 func extractProtocols(from project: URL, commands: [String])
     -> (ProtocolInfo, [String: sourcekitd_variant_t]) {
-    var protocolInfo = ["Error": "$ss5ErrorP"]
+    var protocols = ["Error": "$ss5ErrorP"]
     var fileSyntax = [String: sourcekitd_variant_t]()
-    guard let root = try? project.deletingLastPathComponent()
-            .resourceValues(forKeys: [.canonicalPathKey])
-            .canonicalPath,
-          let enumerator = FileManager.default.enumerator(atPath: root) else {
-        fatalError("⚠️ Bad path to project \(project)")
+    let root = project.deletingLastPathComponent().path
+    guard let enumerator =
+        FileManager.default.enumerator(atPath: root) else {
+        fatalError("⚠️ Could not enumerate \(project)")
     }
-
+        
 //    var primaryFiles = Set<String>()
 //    for command in commands {
 //        for primaryFile: String in command[#"-primary-file (\S+\.swift) "#] {
@@ -112,11 +127,11 @@ func extractProtocols(from project: URL, commands: [String])
             continue
         }
 
-        if let source = try? String(contentsOfFile: fullURL.path) {
+        if let source = try? String(contentsOf: fullURL) {
             for proto: String in
                 source[#"\bprotocol\s+(\w+)\b"#]
-                where protocolInfo[proto] == nil {
-                protocolInfo[proto] = fullURL.path
+                where protocols[proto] == nil {
+                protocols[proto] = fullURL.relativePath
             }
         }
 
@@ -134,10 +149,11 @@ func extractProtocols(from project: URL, commands: [String])
         }
 
         print("Processing", fullURL.relativePath,
-              protocolInfo.count, "protocols"); fflush(stdout)
+              protocols.count, "protocols"); fflush(stdout)
+        continue // no longer use Cursor-Info requests
+
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
-            return // no longer use Cursor-Info (QuickLook) requests
             let offset = node.getInt(key: sourceKit.offsetID)
 
             while node.getString(key: sourceKit.typenameID) != nil {
@@ -175,7 +191,7 @@ func extractProtocols(from project: URL, commands: [String])
 //                    print(notes)
                     for (usr, name): (String, String) in notes[
                         #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
-                        protocolInfo[name] = "$s"+usr
+                        protocols[name] = "$s"+usr
                     }
                 }
 
@@ -184,10 +200,7 @@ func extractProtocols(from project: URL, commands: [String])
         }
     }
 
-    protocolInfo["Sendable"] = nil
-    protocolInfo["Sequence"] = nil
-    protocolInfo["Collection"] = nil
-    return (protocolInfo, fileSyntax)
+    return (protocols, fileSyntax)
 }
 
 typealias Replace = (from: String, to: String)

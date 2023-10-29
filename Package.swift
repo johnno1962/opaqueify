@@ -17,7 +17,9 @@ let package = Package(
         .package(url: "https://github.com/johnno1962/Fortify.git",
                  .upToNextMajor(from: "2.1.5")),
         .package(url: "https://github.com/johnno1962/Popen.git",
-                 .upToNextMajor(from: "1.2.4")),
+                 .upToNextMajor(from: "2.0.0")),
+        .package(url: "https://github.com/johnno1962/DLKit.git",
+                 .upToNextMajor(from: "3.2.2")),
     ],
     targets: [
         .target(name: "opaqueify", dependencies: ["SourceKitHeader", "SwiftRegex", "Fortify", "Popen"], path: "opaqueify/"),
