@@ -14,7 +14,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Insert code here to initialize your application
+        NSApp.dockTile.contentView = dockTile
+        NSApp.dockTile.display()
     }
+
+    @IBOutlet var dockTile: NSView!
 
     @IBAction func openFile(_ sender: Any) {
         let open = NSOpenPanel()

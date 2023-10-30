@@ -9,36 +9,29 @@
 //
 
 import Foundation
+
 // Defines a subscript of a string by a raw
 // string which is interpreted as a regex.
 import SwiftRegex // See https://github.com/johnno1962/SwiftRegex5
 import Popen // To read lines from the build process.
-import DLKit // To determine system protocols.
 #if SWIFT_PACKAGE
 import SourceKitHeader
 #endif
 
 let sourceKit = SourceKit(logRequests: false)
 
-let stagePhaseOnce: () = {
-//    print(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
-}()
+extension Opaqueifier { // Was originally a script, now encapsulated in a class
 
 func extract(build: String) -> [String] {
     guard let stdout = Popen(cmd: build) else {
-        print("⚠️ Could not launch \(build)")
+        log("⚠️ Could not launch \(build)")
         return []
     }
 
-    var commands = [String]()
-    for line in stdout {
-        if line.contains(" -primary-file ") {
-            commands.append(line)
-        }
-    }
+    let commands = stdout.filter { $0.contains(" -primary-file ") }
 
     if !stdout.terminatedOK() {
-        print("⚠️ Build failed: \(build)")
+        log("⚠️ Build failed: \(build)")
     }
     return commands
 }
@@ -49,28 +42,12 @@ func lastLog(project: URL) -> String? {
     let search = "ls -t ~/Library/Developer/Xcode/DerivedData/\(projectName)-*/Logs/Build/*.xcactivitylog"
     guard let logs = Popen(cmd: search),
           let log = logs.readLine() else {
-        print("⚠️ Could not find logs using: \(search)")
+        log("⚠️ Could not find logs using: \(search)")
         return nil
     }
 
     return log
 }
-
-import Cocoa
-
-let CocoaProtocols = {
-    _ = NSWindow() // force load of Cocoa
-    var names = [String: String]()
-    "_OBJC_PROTOCOL_$_".withCString { prefix in
-        let len = strlen(prefix)
-        for entry in DLKit.allImages
-            .entries(withPrefix: prefix) {
-            names[String(cString: entry.name+len)]
-                = entry.imageNumber.imageKey
-        }
-    }
-    return names
-}()
 
 func build(project: URL, xcode: String? = nil) -> [String] {
     let build: String
@@ -86,25 +63,24 @@ func build(project: URL, xcode: String? = nil) -> [String] {
     return extract(build: "\(build) 2>&1 | /usr/bin/tee /tmp/build.txt")
 }
 
-var argumentsToRemove = Set([
-        #"-target-sdk-version \S+ "#,
-        #"-target-sdk-name \S+ "#,
-        "-Xccerror",
-        #"-I\S+ "#,
-])
-
-typealias ProtocolInfo = [String: String]
+public typealias ProtocolInfo = [String: String]
 
 func extractProtocols(from project: URL, commands: [String])
-    -> (ProtocolInfo, [String: sourcekitd_variant_t]) {
+    -> (ProtocolInfo, [String: sourcekitd_response_t]) {
     var protocols = ["Error": "$ss5ErrorP"]
-    var fileSyntax = [String: sourcekitd_variant_t]()
+    var fileSyntax = [String: sourcekitd_response_t]()
     let root = project.deletingLastPathComponent().path
     guard let enumerator =
         FileManager.default.enumerator(atPath: root) else {
         fatalError("⚠️ Could not enumerate \(project)")
     }
-        
+    var argumentsToRemove = Set([
+        #"-target-sdk-version \S+ "#,
+        #"-target-sdk-name \S+ "#,
+        "-Xccerror",
+        #"-I\S+ "#,
+    ])
+
 //    var primaryFiles = Set<String>()
 //    for command in commands {
 //        for primaryFile: String in command[#"-primary-file (\S+\.swift) "#] {
@@ -138,20 +114,20 @@ func extractProtocols(from project: URL, commands: [String])
         let resp = sourceKit.syntaxMap(filePath: fullURL.path, subSyntax: true)
 //        SKApi.response_description_dump(resp)
         let dict = SKApi.response_get_value(resp)
-        fileSyntax[fullURL.path] = dict
+        fileSyntax[fullURL.path] = resp
 
         guard var command = commands.first(where: {
             $0.contains(" -primary-file \(fullURL.path) ") }) else {
             if !fullURL.path[#"/Tests/|\.build/|Examples?/"#] {
-                print("Missing compiler args for \(fullURL.path)")
+                log("Missing compiler args for \(fullURL.path)")
             }
             continue
         }
 
-        print("Processing", fullURL.relativePath,
-              protocols.count, "protocols"); fflush(stdout)
-        continue // no longer use Cursor-Info requests
+        log("Processing", fullURL.relativePath,
+            protocols.count, "protocols"); fflush(stdout)
 
+        continue // no longer use Cursor-Info requests
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
             let offset = node.getInt(key: sourceKit.offsetID)
@@ -180,7 +156,7 @@ func extractProtocols(from project: URL, commands: [String])
                     if argumentsToRemove.count > toRemove {
                         continue
                     }
-                    print(error)
+                    self.log(error)
                     break
                 }
 
@@ -188,7 +164,7 @@ func extractProtocols(from project: URL, commands: [String])
                 if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ??
                                dict.getString(key: sourceKit.annotatedID),
                    notes.contains("ref.protocol") {
-//                    print(notes)
+//                    log(notes)
                     for (usr, name): (String, String) in notes[
                         #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
                         protocols[name] = "$s"+usr
@@ -203,10 +179,10 @@ func extractProtocols(from project: URL, commands: [String])
     return (protocols, fileSyntax)
 }
 
-typealias Replace = (from: String, to: String)
-typealias Patch = (offset: Int, replace: Replace)
+public typealias Replace = (from: String, to: String)
+public typealias Patch = (offset: Int, replace: Replace)
 
-func process(syntax: sourcekitd_variant_t, for fullpath: String,
+func process(syntax: sourcekitd_response_t, for fullpath: String,
              protocols: ProtocolInfo, protoRegex: String,
              decider: @escaping (
                 _ proto: String, _ context: String,
@@ -214,6 +190,7 @@ func process(syntax: sourcekitd_variant_t, for fullpath: String,
              -> String) -> [Patch] {
     var patches = [Patch]()
 
+    let syntax = SKApi.response_get_value(syntax)
     sourceKit.recurseOver(childID: sourceKit.structureID,
                           resp: syntax) { node in
         let offset = node.getInt(key: sourceKit.offsetID)
@@ -227,7 +204,7 @@ func process(syntax: sourcekitd_variant_t, for fullpath: String,
         }
     }
 
-//    print("PATCHES", patches)
+//    log("PATCHES", patches)
     return patches
 }
 
@@ -262,11 +239,11 @@ func apply(patches: [Patch], for file: String, applier:
     return parts.reversed().joined()[#"some some"#, "some"]
 }
 
-typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
+public typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
 
 func addressErrors(file: String, patches: [ErrorPatch]) -> String? {
     guard var source = try? String(contentsOfFile: file) else {
-        print("⚠️ Could not read file: \(file)")
+        log("⚠️ Could not read file: \(file)")
         return nil
     }
 
@@ -275,4 +252,6 @@ func addressErrors(file: String, patches: [ErrorPatch]) -> String? {
     }
 
     return source
+}
+
 }

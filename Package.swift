@@ -8,6 +8,7 @@ let package = Package(
     platforms: [.macOS("10.12")],
     products: [
         .executable(name: "opaqueify", targets: ["opaqueify"]),
+        .library(name: "Opaqueifier", targets: ["Opaqueifier"]),
     ],
     dependencies: [
         .package(url: "https://github.com/johnno1962/SourceKitHeader.git",
@@ -22,6 +23,9 @@ let package = Package(
                  .upToNextMajor(from: "3.2.2")),
     ],
     targets: [
-        .target(name: "opaqueify", dependencies: ["SourceKitHeader", "SwiftRegex", "Fortify", "Popen"], path: "opaqueify/"),
+        .target(name: "opaqueify", dependencies: [
+            "Opaqueifier", "Fortify"], path: "opaqueify/"),
+        .target(name: "Opaqueifier", dependencies: [
+            "SourceKitHeader", "SwiftRegex", "Popen", "DLKit"], path: "Opaqueifier/"),
     ]
 )

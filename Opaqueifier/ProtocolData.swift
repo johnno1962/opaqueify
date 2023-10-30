@@ -5,9 +5,24 @@
 //  Created by John Holdsworth on 28/10/2023.
 //
 
-import Foundation
+import Cocoa
+import DLKit
 
-let UIKitProtocols = [
+public let objcCocoaProtocols = {
+    _ = NSWindow() // force load of Cocoa
+    var names = [String: String]()
+    "_OBJC_PROTOCOL_$_".withCString { prefix in
+        let len = strlen(prefix)
+        for entry in DLKit.allImages
+            .entries(withPrefix: prefix) {
+            names[String(cString: entry.name+len)]
+                = entry.imageNumber.imageKey
+        }
+    }
+    return names
+}()
+
+public let objcUIKitProtocols = [ // extracted using iOS App
     "_UIObjectTraitTokenProtocol": "UIKitCore",
     "_UICGFloatTraitTokenProtocol": "UIKitCore",
     "_UINSIntegerTraitTokenProtocol": "UIKitCore",

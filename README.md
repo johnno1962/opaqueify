@@ -26,7 +26,7 @@ You may then want to take the migration to opaque types further.
 
 ```
 Usage is: 
-/path/to/executable </path/to/Package.swift> [/path/to/recent/Xcode.app]
+/path/to/executable </path/to/Package.swift> [/path/to/recent/Xcode15.app]
 ```
 This project is an experiment on a "best effort"
 basis but hopefully it should save you `some` typing.
