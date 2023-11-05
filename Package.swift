@@ -14,7 +14,7 @@ let package = Package(
         .package(url: "https://github.com/johnno1962/SourceKitHeader.git",
                  .upToNextMajor(from: "2.0.0")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5.git",
-                 .upToNextMajor(from: "5.2.3")),
+                 .upToNextMajor(from: "6.0.0")),
         .package(url: "https://github.com/johnno1962/Fortify.git",
                  .upToNextMajor(from: "2.1.5")),
         .package(url: "https://github.com/johnno1962/Popen.git",

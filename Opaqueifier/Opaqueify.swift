@@ -57,7 +57,7 @@ func build(project: URL, xcode: String? = nil) -> [String] {
         build = "/usr/bin/gunzip <\(log) | /usr/bin/tr '\\r' '\\n'"
     } else {
         let xcbuild = (xcode ?? "/Applications/Xcode.app") + "/Contents/Developer/usr/bin/xcodebuild"
-        build = "\(xcbuild) clean; \(xcbuild) -project \(project.lastPathComponent)"
+        build = "\(xcbuild) clean; \(xcbuild) -project \(project.relativePath)"
     }
 
     return extract(build: "\(build) 2>&1 | /usr/bin/tee /tmp/build.txt")
@@ -127,7 +127,7 @@ func extractProtocols(from project: URL, commands: [String])
         log("Processing", fullURL.relativePath,
             protocols.count, "protocols"); fflush(stdout)
 
-        continue // no longer use Cursor-Info requests
+        continue // no longer use Cursor-Info requests (too slow in Xcode 15)
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
             let offset = node.getInt(key: sourceKit.offsetID)
@@ -210,7 +210,9 @@ func process(syntax: sourcekitd_response_t, for fullpath: String,
 
 func apply(patches: [Patch], for file: String, applier:
     (_ line: inout String,
-     _ patch: Replace) -> ()) -> String? {
+     _ patch: Replace,
+     _ count: UnsafeMutablePointer<Int>) -> (),
+           count: UnsafeMutablePointer<Int>) -> String? {
     guard let data = NSMutableData(contentsOfFile: file) else {
         return nil
     }
@@ -232,7 +234,7 @@ func apply(patches: [Patch], for file: String, applier:
         
         let before = String(cString: bytes)
         guard !before[#"<\#(patch.from): "#] else { continue }
-        applier(&lines[0], patch)
+        applier(&lines[0], patch, count)
     }
 
     parts.append(String(cString: bytes))
@@ -241,14 +243,15 @@ func apply(patches: [Patch], for file: String, applier:
 
 public typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
 
-func addressErrors(file: String, patches: [ErrorPatch]) -> String? {
+func addressErrors(file: String, patches: [ErrorPatch],
+                   count: UnsafeMutablePointer<Int>) -> String? {
     guard var source = try? String(contentsOfFile: file) else {
         log("⚠️ Could not read file: \(file)")
         return nil
     }
 
     for patch in patches.sorted(by: { $0.line > $1.line }) {
-        source[patch.replace.from] = [patch.replace.to]
+        source[patch.replace.from, count: count] = [patch.replace.to]
     }
 
     return source

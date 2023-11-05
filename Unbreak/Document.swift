@@ -38,7 +38,7 @@ class Document: NSDocument, WKUIDelegate, WKNavigationDelegate {
     @IBAction func stashProject(_ sender: Any?) {
         guard let project = fileURL else { return }
         output(cmd: """
-            cd "\(project.deletingLastPathComponent().path)"; git stash
+            cd "\(project.deletingLastPathComponent().path)"; git stash 2>&1
             """)
     }
 

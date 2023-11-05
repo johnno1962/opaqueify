@@ -67,7 +67,8 @@ open class Opaqueifier {
     // Some pretty intense regular expressions.
     // Assigning to a raw String subscript is a
     // replacement of capture groups in the regex.
-    open func sourcePatcher(line: inout String, patch: Replace) {
+    open func sourcePatcher(line: inout String, patch: Replace,
+                            count: UnsafeMutablePointer<Int>) {
         // Prevents repatching if you run the script twice
         let notPreceededBy =
             #"any |some |protocol |extension |& |\.|<"#
@@ -77,7 +78,7 @@ open class Opaqueifier {
         // patch in prefix decided by someAnyPolicy()
         let ident = #"\b((?:\w+\.)*"# + patch.from + #"(?:\.Type)?)"#
         line[notPreceededBy + ident +
-             #"\b(?![:(]|>\(|\s+\{\}|\.self)"#] = [patch.to]
+             #"\b(?![:(]|>\(|\s+\{\}|\.self)"#, count: count] = [patch.to]
 
         // a few special cases to revert to any
         // varargs, default arguments, protocol types, closures
@@ -85,29 +86,35 @@ open class Opaqueifier {
             = ["any $2"]
     }
 
-    open func fixOptionals(source: inout String, protoRegex: String) {
+    open func fixOptionals(source: inout String, protoRegex: String,
+                           count: UnsafeMutablePointer<Int>) {
         // fix up optional syntax (I don't judge)
         let optional = #"\b((?:\w+\.)*"# + protoRegex + #"(?:\.Type)?)"#
-        source[#"\b((?:any|some)(\s+\#(optional)))([?!])"#] = "(any $3)$5"
+        source[#"\b((?:any|some)(\s+\#(optional)))([?!])"#,
+               0, count: count] = "(any $3)$5"
     }
 
-    open func adhocFixes(source: inout String, protoRegex: String) {
+    open func adhocFixes(source: inout String, protoRegex: String,
+                         count: UnsafeMutablePointer<Int>) {
         // A few ad-hoc patches improve the odds.
         // is/as seems to get missed by the syntax tree
         let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?"# +
             protoRegex + #"(?:\.Type)?)(?![:])"#
-        source[cast] = "$1any $2"
+        source[cast, count: count] = { (groups: [String], stop) in
+            let elide = objc_getClass(groups[2]) != nil ? "" : "any "
+            return groups[1]+elide+groups[2]
+        }
 
         // "constrained to non-protocol, non-class type"
-        source[#"<\w+:( any) "#] = ""
+        source[#"<\w+:( any) "#, count: count] = ""
 
         for _ in 1...5 {
             // @objc or cases cannot have generic params
             // allow "case .some" though
-            source[#"(?:@objc|\bcase)\s+[^)]*[^\.]\b(some)\b"#] = "any"
+            source[#"(?:@objc|\bcase)\s+[^)]*[^\.]\b(some)\b"#, count: count] = "any"
         }
 
-        fixOptionals(source: &source, protoRegex: protoRegex)
+        fixOptionals(source: &source, protoRegex: protoRegex, count: count)
     }
 
     // regex matching any known protocol identifier
@@ -121,23 +128,34 @@ open class Opaqueifier {
 
     // Policy factored out, the script starts here..
     open func main(argv: [String], knownPotocols: [[String: String]]) -> CInt {
-        let project = URL(fileURLWithPath: argv[1])
-        guard let project = (try? project.resourceValues(
+        let path = argv[1]
+        let projectURL: URL
+        if path.hasPrefix("/") {
+            let pathURL = URL(fileURLWithPath: path)
+            guard let absolute = (try? pathURL.resourceValues(
                 forKeys: [.canonicalPathKey]).canonicalPath)
-            .flatMap({ URL(fileURLWithPath: $0) }) else {
-            fatalError("⚠️ Bad path to project \(project)")
+                .flatMap({ URL(fileURLWithPath: $0) }) else {
+                fatalError("⚠️ Bad path to project \(pathURL)")
+            }
+            projectURL = URL(fileURLWithPath: absolute.lastPathComponent,
+                             relativeTo: absolute.deletingLastPathComponent())
+            FileManager.default.changeCurrentDirectoryPath(
+                projectURL.deletingLastPathComponent().path)
+        } else {
+            let cwd = FileManager.default.currentDirectoryPath
+            projectURL = URL(fileURLWithPath: path,
+                             relativeTo: URL(fileURLWithPath: cwd))
         }
-        chdir(project.deletingLastPathComponent().path)
 
         // First build the package so we can determine
         // the Swift compiler arguments for SourceKit.
-        let commands = build(project: project)
+        let commands = build(project: projectURL)
 
         // Use a combination of the syntax map and
         // [Cursor-info requests] to determine the
         // set of identifiers that are protocols.
         var (protocols, files)
-            = extractProtocols(from: project, commands: commands)
+            = extractProtocols(from: projectURL, commands: commands)
         log("Protocols detected:", protocols); fflush(stdout)
         for others in knownPotocols {
             protocols.merge(others) { current, _ in current }
@@ -150,9 +168,10 @@ open class Opaqueifier {
             for resp in files.values {
                 SKApi.response_dispose(resp)
             }
+            SKApi.set_interrupted_connection_handler({})
         }
 
-        var edits = 0, protoRegex = protocolRegex(protocols: protocols)
+        var count = 0, edits = 0, protoRegex = protocolRegex(protocols: protocols)
         for (file, syntax) in files {
             // re-use the syntax map to find the patches to any/some
             let patches = process(syntax: syntax, for: file,
@@ -162,9 +181,9 @@ open class Opaqueifier {
 
             if patches.count != 0, // apply any patches and save
                var patched = apply(patches: patches, for: file,
-                                   applier: sourcePatcher) {
+                                   applier: sourcePatcher, count: &count) {
 
-                adhocFixes(source: &patched, protoRegex: protoRegex)
+                adhocFixes(source: &patched, protoRegex: protoRegex, count: &count)
 
                 try! patched.write(toFile: file,
                                    atomically: true, encoding: .utf8)
@@ -172,12 +191,12 @@ open class Opaqueifier {
             }
         }
 
-        log(edits, "edits after",
+        log("\(count)/\(edits) edits after",
             Int(Date.nowInterval-start), "seconds")
 
         // Second pass, use ExistentialAny errors for fixups..
         if argv.count > 2 {
-            return verify(project: project, xcode: argv[2],
+            return verify(project: projectURL, xcode: argv[2],
                    protocols: &protocols, commands: commands)
         }
 
@@ -186,6 +205,7 @@ open class Opaqueifier {
 
     open func verify(project: URL, xcode: String,
         protocols: inout ProtocolInfo, commands: [String]) -> CInt {
+        var count = 0
         for _ in 1...10 {
             log("Rebuilding to verify.."); fflush(stdout)
             let phaseTwo = extractAnyErrors(project: project, xcode: xcode,
@@ -195,8 +215,10 @@ open class Opaqueifier {
 
             for (file, patches) in phaseTwo.patches {
                 _ = stagePhaseOnce
-                if var patched = addressErrors(file: file, patches: patches) {
-                    fixOptionals(source: &patched, protoRegex: protoRegex)
+                if var patched = addressErrors(file: file, patches: patches,
+                                               count: &count) {
+                    fixOptionals(source: &patched, protoRegex: protoRegex,
+                                 count: &count)
 
                     if let package: String = file[#"^.*\.build/checkouts/[^/]+"#] {
                         packagesToVerify.insert(package+"/Package.swift")
@@ -230,7 +252,7 @@ open class Opaqueifier {
                     return EXIT_FAILURE
                 }
             }
-            log(fixups, "fixups after",
+            log("\(count)/\(fixups)", "fixups after",
                 Int(Date.nowInterval-start), "seconds")
         }
 
@@ -359,5 +381,4 @@ open class Opaqueifier {
         }
         return errors
     }
-
 }
