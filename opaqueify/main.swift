@@ -24,7 +24,7 @@ guard argv.count > 1 else {
 do {
     try Fortify.protect {
         exit(Opaqueifier().main(projectPath: argv[1],
-                                xcodePath: argv.count > 2 ? argv[2] : nil,
+                                xcode15Path: argv.count > 2 ? argv[2] : nil,
                 knownPotocols: [objcCocoaProtocols, objcUIKitProtocols]))
     }
 } catch {

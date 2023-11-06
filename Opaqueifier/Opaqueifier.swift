@@ -43,6 +43,141 @@ open class Opaqueifier {
             separator: separator), terminator: terminator)
     }
 
+    // Policy factored out below, the script starts here..
+    open func main(projectPath: String, xcode15Path: String?,
+                   knownPotocols: [[String: String]]) -> CInt {
+        let projectURL: URL
+        if projectPath.hasPrefix("/") {
+            let pathURL = URL(fileURLWithPath: projectPath)
+            guard let absolute = (try? pathURL.resourceValues(
+                forKeys: [.canonicalPathKey]).canonicalPath)
+                .flatMap({ URL(fileURLWithPath: $0) }) else {
+                fatalError("⚠️ Bad path to project \(pathURL)")
+            }
+            projectURL = URL(fileURLWithPath: absolute.lastPathComponent,
+                             relativeTo: absolute.deletingLastPathComponent())
+            FileManager.default.changeCurrentDirectoryPath(
+                projectURL.deletingLastPathComponent().path)
+        } else {
+            let cwd = FileManager.default.currentDirectoryPath
+            projectURL = URL(fileURLWithPath: projectPath,
+                             relativeTo: URL(fileURLWithPath: cwd))
+        }
+
+        // First build the package so we can determine
+        // the Swift compiler arguments for SourceKit.
+        let commands = build(project: projectURL)
+
+        // Use a combination of the syntax map and
+        // [Cursor-info requests] to determine the
+        // set of identifiers that are protocols.
+        var (protocols, files)
+            = extractProtocols(from: projectURL, commands: commands)
+        log("Protocols detected:", protocols); fflush(stdout)
+        for others in knownPotocols {
+            protocols.merge(others) { current, _ in current }
+        }
+        protocols["Sendable"] = nil
+        protocols["Sequence"] = nil
+        protocols["Subscript"] = nil
+        protocols["Collection"] = nil
+
+        defer {
+            for resp in files.values {
+                SKApi.response_dispose(resp)
+            }
+            SKApi.set_interrupted_connection_handler({})
+        }
+
+        var count = 0, edits = 0, protoRegex = protocolRegex(protocols: protocols)
+        for (file, syntax) in files {
+            // re-use the syntax map to find the patches to any/some
+            let patches = process(syntax: syntax, for: file,
+                                  protocols: protocols,
+                                  protoRegex: protoRegex,
+                                  decider: someAnyPolicy)
+
+            if patches.count != 0, // apply any patches and save
+               var patched = apply(patches: patches, for: file,
+                                   applier: sourcePatcher, count: &count) {
+
+                adhocFixes(source: &patched, protoRegex: protoRegex, count: &count)
+
+                try! patched.write(toFile: file,
+                                   atomically: true, encoding: .utf8)
+                edits += patches.count
+            }
+        }
+
+        log("\(count)/\(edits) edits after",
+            Int(Date.nowInterval-start), "seconds")
+
+        // Second pass, use ExistentialAny errors for fixups..
+        if let xcode = xcode15Path {
+            return verify(project: projectURL, xcode: xcode,
+                   protocols: &protocols, commands: commands)
+        }
+
+        return EXIT_SUCCESS
+    }
+
+    open func verify(project: URL, xcode: String,
+        protocols: inout ProtocolInfo, commands: [String]) -> CInt {
+        var count = 0
+        for _ in 1...10 {
+            log("Rebuilding to verify.."); fflush(stdout)
+            let phaseTwo = extractAnyErrors(project: project, xcode: xcode,
+                protocols: &protocols, commands: commands),
+                protoRegex = protocolRegex(protocols: protocols)
+            var packagesToVerify = Set<String>(), fixups = 0
+
+            for (file, patches) in phaseTwo.patches {
+                _ = stagePhaseOnce
+                if var patched = addressErrors(file: file, patches: patches,
+                                               count: &count) {
+                    fixOptionals(source: &patched, protoRegex: protoRegex,
+                                 count: &count)
+
+                    if let package: String = file[#"^.*\.build/checkouts/[^/]+"#] {
+                        packagesToVerify.insert(package+"/Package.swift")
+                        log("ℹ️ Having to patch file in dependency:",
+                            file, patches)
+                        chmod(file, 0o644)
+                    }
+                    try? patched.write(toFile: file,
+                        atomically: true, encoding: .utf8)
+                }
+                fixups += patches.count
+//                log(file+":", fixups, patches)
+            }
+
+//        for package in packagesToVerify {
+//            log("Sub-verifying", package)
+//            verify(project: URL(fileURLWithPath: package),
+//                   xcode: xcode, protocols: &protocols)
+//        }
+
+            if fixups == 0 {
+                log("Completed fixups after",
+                    Int(Date.nowInterval-start), "seconds")
+                let errors = Set(phaseTwo.errors).count
+                if errors == 0 {
+                    log(project.deletingPathExtension()
+                        .lastPathComponent, "seems to have built 👍")
+                    return EXIT_SUCCESS
+                } else {
+                    log("Please correct remaining \(errors) errors manually")
+                    return EXIT_FAILURE
+                }
+            }
+            log("\(count)/\(fixups)", "fixups after",
+                Int(Date.nowInterval-start), "seconds")
+        }
+
+        log("Please correct remaining errors manually")
+        return EXIT_FAILURE
+    }
+
     // Criterion for chosing some over any
     open func someAnyPolicy(proto: String, context: String,
         type: String, protocols: ProtocolInfo) -> String {
@@ -131,141 +266,6 @@ open class Opaqueifier {
     open lazy var stagePhaseOnce: () = {
         log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
     }()
-
-    // Policy factored out, the script starts here..
-    open func main(projectPath: String, xcodePath: String?,
-                   knownPotocols: [[String: String]]) -> CInt {
-        let projectURL: URL
-        if projectPath.hasPrefix("/") {
-            let pathURL = URL(fileURLWithPath: projectPath)
-            guard let absolute = (try? pathURL.resourceValues(
-                forKeys: [.canonicalPathKey]).canonicalPath)
-                .flatMap({ URL(fileURLWithPath: $0) }) else {
-                fatalError("⚠️ Bad path to project \(pathURL)")
-            }
-            projectURL = URL(fileURLWithPath: absolute.lastPathComponent,
-                             relativeTo: absolute.deletingLastPathComponent())
-            FileManager.default.changeCurrentDirectoryPath(
-                projectURL.deletingLastPathComponent().path)
-        } else {
-            let cwd = FileManager.default.currentDirectoryPath
-            projectURL = URL(fileURLWithPath: projectPath,
-                             relativeTo: URL(fileURLWithPath: cwd))
-        }
-
-        // First build the package so we can determine
-        // the Swift compiler arguments for SourceKit.
-        let commands = build(project: projectURL)
-
-        // Use a combination of the syntax map and
-        // [Cursor-info requests] to determine the
-        // set of identifiers that are protocols.
-        var (protocols, files)
-            = extractProtocols(from: projectURL, commands: commands)
-        log("Protocols detected:", protocols); fflush(stdout)
-        for others in knownPotocols {
-            protocols.merge(others) { current, _ in current }
-        }
-        protocols["Sendable"] = nil
-        protocols["Sequence"] = nil
-        protocols["Subscript"] = nil
-        protocols["Collection"] = nil
-
-        defer {
-            for resp in files.values {
-                SKApi.response_dispose(resp)
-            }
-            SKApi.set_interrupted_connection_handler({})
-        }
-
-        var count = 0, edits = 0, protoRegex = protocolRegex(protocols: protocols)
-        for (file, syntax) in files {
-            // re-use the syntax map to find the patches to any/some
-            let patches = process(syntax: syntax, for: file,
-                                  protocols: protocols,
-                                  protoRegex: protoRegex,
-                                  decider: someAnyPolicy)
-
-            if patches.count != 0, // apply any patches and save
-               var patched = apply(patches: patches, for: file,
-                                   applier: sourcePatcher, count: &count) {
-
-                adhocFixes(source: &patched, protoRegex: protoRegex, count: &count)
-
-                try! patched.write(toFile: file,
-                                   atomically: true, encoding: .utf8)
-                edits += patches.count
-            }
-        }
-
-        log("\(count)/\(edits) edits after",
-            Int(Date.nowInterval-start), "seconds")
-
-        // Second pass, use ExistentialAny errors for fixups..
-        if let xcode = xcodePath {
-            return verify(project: projectURL, xcode: xcode,
-                   protocols: &protocols, commands: commands)
-        }
-
-        return EXIT_SUCCESS
-    }
-
-    open func verify(project: URL, xcode: String,
-        protocols: inout ProtocolInfo, commands: [String]) -> CInt {
-        var count = 0
-        for _ in 1...10 {
-            log("Rebuilding to verify.."); fflush(stdout)
-            let phaseTwo = extractAnyErrors(project: project, xcode: xcode,
-                protocols: &protocols, commands: commands),
-                protoRegex = protocolRegex(protocols: protocols)
-            var packagesToVerify = Set<String>(), fixups = 0
-
-            for (file, patches) in phaseTwo.patches {
-                _ = stagePhaseOnce
-                if var patched = addressErrors(file: file, patches: patches,
-                                               count: &count) {
-                    fixOptionals(source: &patched, protoRegex: protoRegex,
-                                 count: &count)
-
-                    if let package: String = file[#"^.*\.build/checkouts/[^/]+"#] {
-                        packagesToVerify.insert(package+"/Package.swift")
-                        log("ℹ️ Having to patch file in dependency:",
-                            file, patches)
-                        chmod(file, 0o644)
-                    }
-                    try? patched.write(toFile: file,
-                        atomically: true, encoding: .utf8)
-                }
-                fixups += patches.count
-//                log(file+":", fixups, patches)
-            }
-
-//        for package in packagesToVerify {
-//            log("Sub-verifying", package)
-//            verify(project: URL(fileURLWithPath: package),
-//                   xcode: xcode, protocols: &protocols)
-//        }
-
-            if fixups == 0 {
-                log("Completed fixups after",
-                    Int(Date.nowInterval-start), "seconds")
-                let errors = Set(phaseTwo.errors).count
-                if errors == 0 {
-                    log(project.deletingPathExtension()
-                        .lastPathComponent, "seems to have built 👍")
-                    return EXIT_SUCCESS
-                } else {
-                    log("Please correct remaining \(errors) errors manually")
-                    return EXIT_FAILURE
-                }
-            }
-            log("\(count)/\(fixups)", "fixups after",
-                Int(Date.nowInterval-start), "seconds")
-        }
-
-        log("Please correct remaining errors manually")
-        return EXIT_FAILURE
-    }
 
     open func extractAnyErrors(project: URL, xcode: String,
         protocols: inout ProtocolInfo, commands: [String])
