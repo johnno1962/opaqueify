@@ -51,10 +51,11 @@ open class Opaqueifier {
             protocols[proto]?.hasPrefix("$sS") != true &&
             protocols[proto]?.hasPrefix("$s7Combine") != true &&
             protocols[proto]?.hasPrefix("$s10Foundation") != true
-        return //type[proto+#">"#] ||
-            objc_getClass(proto) != nil ? "" :
-            context.hasSuffix("parameter") &&
-            // Not inside a container or closure
+        return proto.hasPrefix("Any") || //type[proto+#">"#] ||
+            proto.count == 1 || // likely to be generic constraint
+            objc_getClass(proto) != nil ? "" : // concrete class
+            context.hasSuffix("parameter") && // elide to some?
+            // not inside a container, Result or closure
             !type[proto+#"[\]>?]|\)(?:throws )? ->"#] &&
             // and never `some` for a system protocol
             // to avoid breaking common conformances.
@@ -71,7 +72,7 @@ open class Opaqueifier {
                             count: UnsafeMutablePointer<Int>) {
         // Prevents repatching if you run the script twice
         let notPreceededBy =
-            #"any |some |protocol |extension |& |\.|<"#
+            #"any |some |protocol |extension |where |& |\.|<"#
             .components(separatedBy: #"|"#)
             .map { #"(?<!\#($0))"# }.joined()
 
@@ -89,7 +90,7 @@ open class Opaqueifier {
     open func fixOptionals(source: inout String, protoRegex: String,
                            count: UnsafeMutablePointer<Int>) {
         // fix up optional syntax (I don't judge)
-        let optional = #"\b((?:\w+\.)*"# + protoRegex + #"(?:\.Type)?)"#
+        let optional = #"\b((?:\w+\.)*("# + protoRegex + #")(?:\.Type)?)"#
         source[#"\b((?:any|some)(\s+\#(optional)))([?!])"#,
                0, count: count] = "(any $3)$5"
     }
@@ -98,20 +99,25 @@ open class Opaqueifier {
                          count: UnsafeMutablePointer<Int>) {
         // A few ad-hoc patches improve the odds.
         // is/as seems to get missed by the syntax tree
-        let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?"# +
-            protoRegex + #"(?:\.Type)?)(?![:])"#
+        let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?("# +
+            protoRegex + #")(?:\.Type)?)(?![:a-z])"#
         source[cast, count: count] = { (groups: [String], stop) in
-            let elide = objc_getClass(groups[2]) != nil ? "" : "any "
+            let elide = objc_getClass(groups[2]) != nil ||
+                groups[2].hasPrefix("Any") ? "" : "any "
             return groups[1]+elide+groups[2]
         }
 
         // "constrained to non-protocol, non-class type"
         source[#"<\w+:( any) "#, count: count] = ""
 
+        // promote returning some (with exceptions e.g Disposable in RxSwift)
+        source[#"-> (any) (?!Encoder|Decoder|Disposable)\#(protoRegex) \{"#,
+               1, count: count] = "some"
+
         for _ in 1...5 {
             // @objc or cases cannot have generic params
             // allow "case .some" though
-            source[#"(?:@objc|\bcase)\s+[^)]*[^\.]\b(some)\b"#, count: count] = "any"
+            source[#"(?:@objc|\bcase)\s+.*[^\.]\b(some)\b"#, count: count] = "any"
         }
 
         fixOptionals(source: &source, protoRegex: protoRegex, count: count)
@@ -119,19 +125,19 @@ open class Opaqueifier {
 
     // regex matching any known protocol identifier
     open func protocolRegex(protocols: ProtocolInfo) -> String {
-        return #"\b(\#(protocols.keys.joined(separator: "|")))\b"#
+        return #"\b(?:\#(protocols.keys.joined(separator: "|")))\b"#
     }
 
     open lazy var stagePhaseOnce: () = {
-//        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
+        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
     }()
 
     // Policy factored out, the script starts here..
-    open func main(argv: [String], knownPotocols: [[String: String]]) -> CInt {
-        let path = argv[1]
+    open func main(projectPath: String, xcodePath: String?,
+                   knownPotocols: [[String: String]]) -> CInt {
         let projectURL: URL
-        if path.hasPrefix("/") {
-            let pathURL = URL(fileURLWithPath: path)
+        if projectPath.hasPrefix("/") {
+            let pathURL = URL(fileURLWithPath: projectPath)
             guard let absolute = (try? pathURL.resourceValues(
                 forKeys: [.canonicalPathKey]).canonicalPath)
                 .flatMap({ URL(fileURLWithPath: $0) }) else {
@@ -143,7 +149,7 @@ open class Opaqueifier {
                 projectURL.deletingLastPathComponent().path)
         } else {
             let cwd = FileManager.default.currentDirectoryPath
-            projectURL = URL(fileURLWithPath: path,
+            projectURL = URL(fileURLWithPath: projectPath,
                              relativeTo: URL(fileURLWithPath: cwd))
         }
 
@@ -162,6 +168,7 @@ open class Opaqueifier {
         }
         protocols["Sendable"] = nil
         protocols["Sequence"] = nil
+        protocols["Subscript"] = nil
         protocols["Collection"] = nil
 
         defer {
@@ -195,8 +202,8 @@ open class Opaqueifier {
             Int(Date.nowInterval-start), "seconds")
 
         // Second pass, use ExistentialAny errors for fixups..
-        if argv.count > 2 {
-            return verify(project: projectURL, xcode: argv[2],
+        if let xcode = xcodePath {
+            return verify(project: projectURL, xcode: xcode,
                    protocols: &protocols, commands: commands)
         }
 
@@ -230,7 +237,7 @@ open class Opaqueifier {
                         atomically: true, encoding: .utf8)
                 }
                 fixups += patches.count
-    //            log(reedits, file, patches)
+//                log(file+":", fixups, patches)
             }
 
 //        for package in packagesToVerify {
@@ -256,6 +263,7 @@ open class Opaqueifier {
                 Int(Date.nowInterval-start), "seconds")
         }
 
+        log("Please correct remaining errors manually")
         return EXIT_FAILURE
     }
 
@@ -359,7 +367,7 @@ open class Opaqueifier {
                         protocols[proto] = file
                     }
                 } else if let proto: String = output[
-                    #"'any' has no effect on (?:type parameter|concrete type) '(?:[^'.]+\.)*(\w+)(?:\.Type)?'"#] {
+                    #"'any' has no effect on (?:type parameter|concrete type) '(?:[^'.]+\.)*(\w+\??)(?:\.Type)?'"#] {
                     let change = #"(any (?:\w+\.)*\#(proto))"#
                     out[file, default: []].append((line, col,
                         (from: offset+once+change, to: proto)))
@@ -373,6 +381,16 @@ open class Opaqueifier {
                     let change = "[^)]+ (some) "
                     out[file, default: []].append((line, col,
                         (from: offset+once+change, to: "any")))
+                } else if output[
+                    "'some' return types are only available in"] {
+                    let change = "-> (some) "
+                    out[file, default: []].append((line, col,
+                        (from: offset+once+change, to: "any")))
+                } else if let type: String = output[
+                    #"type 'some ([^']+)' constrained to non-protocol, non-class type"#] {
+                    let change = "(some )"+type
+                    out[file, default: []].append((line, col,
+                        (from: offset+once+change, to: "")))
                 } else {
                     errors.append(output)
                     log(output)

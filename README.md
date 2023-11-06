@@ -15,7 +15,7 @@ not storage and only procedure arguments of a simple bare protocol type
 the any prefix will be added, including for those of system protocols.
 ```
 This is a fairly conservative rule that should realise much of any
-perform benefit to be had through increased use of `some` for
+performance benefit to be had through increased use of `some` for
 procedure arguments as they are generally the bulk of declarations.
 
 Your milage may vary as this is still a change to your source

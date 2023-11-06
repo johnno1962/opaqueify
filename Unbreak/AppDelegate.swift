@@ -23,9 +23,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBAction func openFile(_ sender: Any) {
         let open = NSOpenPanel()
         open.prompt = "Select Project File"
+        open.canChooseDirectories = true
         open.canChooseFiles = true
         if open.runModal() == .OK,
-           let url = open.url {
+           var url = open.url {
+            let pkg = url.appendingPathComponent("Package.swift")
+            if FileManager.default.fileExists(atPath: pkg.path) {
+                url = pkg
+            }
             if let doc = try? Document(contentsOf: url, ofType:
                                         url.lastPathComponent),
                let nib = doc.windowNibName {

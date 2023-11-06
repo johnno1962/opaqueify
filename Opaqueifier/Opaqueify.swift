@@ -67,7 +67,9 @@ public typealias ProtocolInfo = [String: String]
 
 func extractProtocols(from project: URL, commands: [String])
     -> (ProtocolInfo, [String: sourcekitd_response_t]) {
-    var protocols = ["Error": "$ss5ErrorP"]
+    var protocols = ["Error": "$ss5ErrorP",
+                     "Encoder": "$ss7EncoderP",
+                     "Decoder": "$ss7DecoderP"]
     var fileSyntax = [String: sourcekitd_response_t]()
     let root = project.deletingLastPathComponent().path
     guard let enumerator =
@@ -127,6 +129,7 @@ func extractProtocols(from project: URL, commands: [String])
         log("Processing", fullURL.relativePath,
             protocols.count, "protocols"); fflush(stdout)
 
+        #if false
         continue // no longer use Cursor-Info requests (too slow in Xcode 15)
         sourceKit.recurseOver(childID: sourceKit.structureID,
                               resp: dict) { node in
@@ -174,6 +177,7 @@ func extractProtocols(from project: URL, commands: [String])
                 break
             }
         }
+        #endif
     }
 
     return (protocols, fileSyntax)

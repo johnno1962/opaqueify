@@ -409,6 +409,7 @@ public class SourceKit {
         return out
     }
 
+    #if false
     func disectUSR(usr: NSString) -> [String]? {
         guard usr.hasPrefix("s:") else { return nil }
 
@@ -448,4 +449,5 @@ public class SourceKit {
 
         return out
     }
+    #endif
 }
