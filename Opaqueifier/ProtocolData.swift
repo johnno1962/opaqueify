@@ -9,7 +9,7 @@ import Cocoa
 import DLKit
 
 public let objcCocoaProtocols = {
-    _ = NSApplication.shared // force load of Cocoa
+    _ = NSView() // force load of Cocoa
     var names = [String: String]()
     "_OBJC_PROTOCOL_$_".withCString { prefix in
         let len = strlen(prefix)
