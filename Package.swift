@@ -12,15 +12,15 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/johnno1962/SourceKitHeader.git",
-                 .upToNextMajor(from: "2.0.0")),
+                 .upToNextMinor(from: "2.0.0")),
         .package(url: "https://github.com/johnno1962/SwiftRegex5.git",
-                 .upToNextMajor(from: "6.0.0")),
+                 .upToNextMinor(from: "6.0.0")),
         .package(url: "https://github.com/johnno1962/Fortify.git",
-                 .upToNextMajor(from: "2.1.5")),
+                 .upToNextMinor(from: "2.1.5")),
         .package(url: "https://github.com/johnno1962/Popen.git",
-                 .upToNextMajor(from: "2.0.0")),
+                 .upToNextMinor(from: "2.0.0")),
         .package(url: "https://github.com/johnno1962/DLKit.git",
-                 .upToNextMajor(from: "3.2.2")),
+                 .upToNextMinor(from: "3.2.2")),
     ],
     targets: [
         .target(name: "opaqueify", dependencies: [

@@ -198,8 +198,7 @@ open class Opaqueifier {
             ? "some " : "any "
     }
 
-
-    // Code that actually patches the source.
+    // Code that actually patches the source..
     // Some pretty intense regular expressions.
     // Assigning to a raw String subscript is a
     // replacement of capture groups in the regex.
@@ -267,80 +266,9 @@ open class Opaqueifier {
         log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
     }()
 
-    open func extractAnyErrors(project: URL, xcode: String,
-        protocols: inout ProtocolInfo, commands: [String])
-        -> (patches: [String: [ErrorPatch]], errors: [String]) {
-        let name = (project.lastPathComponent == "Package.swift" ?
-                    project.deletingLastPathComponent() :
-                    project.deletingPathExtension()).lastPathComponent,
-            tmplog = "\"/tmp/rebuild_\(name).txt\"", builder =
-                "\(xcode)/Contents/Developer/usr/bin/xcodebuild",
-            xcbuild = """
-                \(builder) OTHER_SWIFT_FLAGS=\
-                '-DDEBUG -enable-upcoming-feature ExistentialAny' \
-                -project \(project.lastPathComponent)
-                """,
-            rebuild = project
-                .lastPathComponent == "Package.swift" ? """
-                \(xcode)/Contents/Developer/\
-                Toolchains/XcodeDefault.xctoolchain/usr/bin/\
-                swift build -Xswiftc -enable-upcoming-feature \
-                -Xswiftc ExistentialAny
-                """ : """
-                \(xcbuild) || \(builder) clean && \(xcbuild)
-                """
-        guard let stdout = Popen(cmd: """
-                (\(rebuild)) >\(tmplog) 2>&1; STATUS=$?; sort -u \(tmplog); exit $STATUS
-                """) else {
-            log("⚠️ Could not open rebuild: "+rebuild)
-            return ([:], [])
-        }
-
-        var out = [String: [ErrorPatch]]()
-        var errors = parseErrors(stdout: stdout,
-             protocols: &protocols, out: &out)
-
-        if !stdout.terminatedOK(),
-            project.lastPathComponent != "Package.swift" {
-            log("ℹ️ Compiling individual files as xcodebuild failed: "+rebuild)
-            errors = fallbackBuild(using: commands, tmplog: tmplog,
-                           protocols: &protocols, out: &out)
-        }
-
-        return (out, errors ?? [])
-    }
-
-    open func fallbackBuild(using commands: [String], tmplog: String,
-                       protocols: inout ProtocolInfo,
-                       out: inout [String: [ErrorPatch]]) -> [String] {
-        var total = [String]()
-        for var command in commands {
-            command[#"builtin-swiftTaskExecution -- "#] = ""
-            command[#"( -c) "#] =
-                "$1 -enable-upcoming-feature ExistentialAny"
-            command[#"-supplementary-output-file-map \S+ "#] = ""
-            command[#"Bridging-Header-swift_(\w+)"#] = "*"
-            command[#"-frontend-parseable-output "#] = ""
-            command += " 2>&1 | tee -a \(tmplog)"
-            for _ in 1...3 {
-                guard let stdout = Popen(cmd: command) else {
-                    log("⚠️ Could not execute: "+command)
-                    break
-                }
-                if let errors = parseErrors(stdout: stdout,
-                    protocols: &protocols, out: &out) {
-                    _ = stagePhaseOnce
-                    total += errors
-                    break
-                }
-            }
-        }
-        return total
-    }
-
     open func parseErrors(stdout: Popen,
-                     protocols: inout ProtocolInfo,
-                     out: inout [String: [ErrorPatch]]) -> [String]? {
+                          protocols: inout ProtocolInfo,
+                          out: inout [String: [ErrorPatch]]) -> [String]? {
         var errors = [String]()
         for output in stdout {
             if let (path, before, after):

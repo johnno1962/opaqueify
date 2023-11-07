@@ -22,243 +22,312 @@ let sourceKit = SourceKit(logRequests: false)
 
 extension Opaqueifier { // Was originally a script, now encapsulated in a class
 
-func extract(build: String) -> [String] {
-    guard let stdout = Popen(cmd: build) else {
-        log("⚠️ Could not launch \(build)")
-        return []
+    func extract(build: String) -> [String] {
+        guard let stdout = Popen(cmd: build) else {
+            log("⚠️ Could not launch \(build)")
+            return []
+        }
+
+        let commands = stdout.filter { $0.contains(" -primary-file ") }
+
+        if !stdout.terminatedOK() {
+            log("⚠️ Build failed: \(build)")
+        }
+        return commands
     }
 
-    let commands = stdout.filter { $0.contains(" -primary-file ") }
+    func lastLog(project: URL) -> String? {
+        let projectName = project
+            .deletingPathExtension().lastPathComponent
+        let search = "ls -t ~/Library/Developer/Xcode/DerivedData/\(projectName)-*/Logs/Build/*.xcactivitylog"
+        guard let logs = Popen(cmd: search),
+              let log = logs.readLine() else {
+            log("⚠️ Could not find logs using: \(search)")
+            return nil
+        }
 
-    if !stdout.terminatedOK() {
-        log("⚠️ Build failed: \(build)")
-    }
-    return commands
-}
-
-func lastLog(project: URL) -> String? {
-    let projectName = project
-        .deletingPathExtension().lastPathComponent
-    let search = "ls -t ~/Library/Developer/Xcode/DerivedData/\(projectName)-*/Logs/Build/*.xcactivitylog"
-    guard let logs = Popen(cmd: search),
-          let log = logs.readLine() else {
-        log("⚠️ Could not find logs using: \(search)")
-        return nil
+        return log
     }
 
-    return log
-}
+    func build(project: URL, xcode: String? = nil) -> [String] {
+        let build: String
+        if project.lastPathComponent == "Package.swift" {
+            build = "rm -rf .build; swift build -v"
+        } else if let log = lastLog(project: project) {
+            build = "/usr/bin/gunzip <\(log) | /usr/bin/tr '\\r' '\\n'"
+        } else {
+            let xcbuild = (xcode ?? "/Applications/Xcode.app") + "/Contents/Developer/usr/bin/xcodebuild"
+            build = "\(xcbuild) clean; \(xcbuild) -project \(project.relativePath)"
+        }
 
-func build(project: URL, xcode: String? = nil) -> [String] {
-    let build: String
-    if project.lastPathComponent == "Package.swift" {
-        build = "rm -rf .build; swift build -v"
-    } else if let log = lastLog(project: project) {
-        build = "/usr/bin/gunzip <\(log) | /usr/bin/tr '\\r' '\\n'"
-    } else {
-        let xcbuild = (xcode ?? "/Applications/Xcode.app") + "/Contents/Developer/usr/bin/xcodebuild"
-        build = "\(xcbuild) clean; \(xcbuild) -project \(project.relativePath)"
+        return extract(build: "\(build) 2>&1 | /usr/bin/tee /tmp/build.txt")
     }
 
-    return extract(build: "\(build) 2>&1 | /usr/bin/tee /tmp/build.txt")
-}
+    public typealias ProtocolInfo = [String: String]
 
-public typealias ProtocolInfo = [String: String]
+    func extractProtocols(from project: URL, commands: [String])
+        -> (ProtocolInfo, [String: sourcekitd_response_t]) {
+        var protocols = ["Error": "$ss5ErrorP",
+                         "Encoder": "$ss7EncoderP",
+                         "Decoder": "$ss7DecoderP"]
+        var fileSyntax = [String: sourcekitd_response_t]()
+        let root = project.deletingLastPathComponent().path
+        guard let enumerator =
+            FileManager.default.enumerator(atPath: root) else {
+            fatalError("⚠️ Could not enumerate \(project)")
+        }
+        var argumentsToRemove = Set([
+            #"-target-sdk-version \S+ "#,
+            #"-target-sdk-name \S+ "#,
+            "-Xccerror",
+            #"-I\S+ "#,
+        ])
 
-func extractProtocols(from project: URL, commands: [String])
-    -> (ProtocolInfo, [String: sourcekitd_response_t]) {
-    var protocols = ["Error": "$ss5ErrorP",
-                     "Encoder": "$ss7EncoderP",
-                     "Decoder": "$ss7DecoderP"]
-    var fileSyntax = [String: sourcekitd_response_t]()
-    let root = project.deletingLastPathComponent().path
-    guard let enumerator =
-        FileManager.default.enumerator(atPath: root) else {
-        fatalError("⚠️ Could not enumerate \(project)")
-    }
-    var argumentsToRemove = Set([
-        #"-target-sdk-version \S+ "#,
-        #"-target-sdk-name \S+ "#,
-        "-Xccerror",
-        #"-I\S+ "#,
-    ])
-
-//    var primaryFiles = Set<String>()
-//    for command in commands {
-//        for primaryFile: String in command[#"-primary-file (\S+\.swift) "#] {
-//            primaryFiles.insert(primaryFile)
-//            if let source = try? String(contentsOfFile: primaryFile) {
-//                for proto: String in
-//                    source[#"\bprotocol\s+(\w+)\b"#]
-//                    where protocolInfo[proto] == nil {
-//                    protocolInfo[proto] = primaryFile
+//        var primaryFiles = Set<String>()
+//        for command in commands {
+//            for primaryFile: String in command[#"-primary-file (\S+\.swift) "#] {
+//                primaryFiles.insert(primaryFile)
+//                if let source = try? String(contentsOfFile: primaryFile) {
+//                    for proto: String in
+//                        source[#"\bprotocol\s+(\w+)\b"#]
+//                        where protocolInfo[proto] == nil {
+//                        protocolInfo[proto] = primaryFile
+//                    }
 //                }
 //            }
 //        }
-//    }
 
-    for relative in enumerator {
-        guard let relative = relative as? String else { continue }
-        let fullURL = URL(fileURLWithPath: relative,
-            relativeTo: URL(fileURLWithPath: root))
-        guard fullURL.path.hasSuffix(".swift") else {
-            continue
-        }
-
-        if let source = try? String(contentsOf: fullURL) {
-            for proto: String in
-                source[#"\bprotocol\s+(\w+)\b"#]
-                where protocols[proto] == nil {
-                protocols[proto] = fullURL.relativePath
+        for relative in enumerator {
+            guard let relative = relative as? String else { continue }
+            let fullURL = URL(fileURLWithPath: relative,
+                relativeTo: URL(fileURLWithPath: root))
+            guard fullURL.path.hasSuffix(".swift") else {
+                continue
             }
-        }
 
-        let resp = sourceKit.syntaxMap(filePath: fullURL.path, subSyntax: true)
-//        SKApi.response_description_dump(resp)
-        let dict = SKApi.response_get_value(resp)
-        fileSyntax[fullURL.path] = resp
-
-        guard var command = commands.first(where: {
-            $0.contains(" -primary-file \(fullURL.path) ") }) else {
-            if !fullURL.path[#"/Tests/|\.build/|Examples?/"#] {
-                log("Missing compiler args for \(fullURL.path)")
+            if let source = try? String(contentsOf: fullURL) {
+                for proto: String in
+                    source[#"\bprotocol\s+(\w+)\b"#]
+                    where protocols[proto] == nil {
+                    protocols[proto] = fullURL.relativePath
+                }
             }
-            continue
-        }
 
-        log("Processing", fullURL.relativePath,
-            protocols.count, "protocols"); fflush(stdout)
+            let resp = sourceKit.syntaxMap(filePath: fullURL.path, subSyntax: true)
+//            SKApi.response_description_dump(resp)
+            let dict = SKApi.response_get_value(resp)
+            fileSyntax[fullURL.path] = resp
 
-        #if false
-        continue // no longer use Cursor-Info requests (too slow in Xcode 15)
-        sourceKit.recurseOver(childID: sourceKit.structureID,
-                              resp: dict) { node in
-            let offset = node.getInt(key: sourceKit.offsetID)
+            guard var command = commands.first(where: {
+                $0.contains(" -primary-file \(fullURL.path) ") }) else {
+                if !fullURL.path[#"/Tests/|\.build/|Examples?/"#] {
+                    log("Missing compiler args for \(fullURL.path)")
+                }
+                continue
+            }
 
-            while node.getString(key: sourceKit.typenameID) != nil {
-                command[""+argumentsToRemove
-                    .joined(separator: "|")] = ""
+            log("Processing", fullURL.relativePath,
+                protocols.count, "protocols"); fflush(stdout)
 
-                let args = Array(command.components(
-                    separatedBy: " ").dropFirst(2))
+            #if false // no longer use Cursor-Info requests (too slow in Xcode 15)
+            sourceKit.recurseOver(childID: sourceKit.structureID,
+                                  resp: dict) { node in
+                let offset = node.getInt(key: sourceKit.offsetID)
 
-                let info = sourceKit.cursorInfo(filePath:
-                    fullURL.path, byteOffset: Int32(offset),
-                    compilerArgs: sourceKit.array(argv: args))
-                if let error = sourceKit.error(resp: info) {
-                    let toRemove = argumentsToRemove.count
-                    for argh: String in error[
-                        #"(?:unknown argument:|error: option) '([^']*)'"#] {
-                        argumentsToRemove.insert(argh
-                            .replacingOccurrences(of: "\\", with: "\\\\"))
+                while node.getString(key: sourceKit.typenameID) != nil {
+                    command[""+argumentsToRemove
+                        .joined(separator: "|")] = ""
+
+                    let args = Array(command.components(
+                        separatedBy: " ").dropFirst(2))
+
+                    let info = sourceKit.cursorInfo(filePath:
+                        fullURL.path, byteOffset: Int32(offset),
+                        compilerArgs: sourceKit.array(argv: args))
+                    if let error = sourceKit.error(resp: info) {
+                        let toRemove = argumentsToRemove.count
+                        for argh: String in error[
+                            #"(?:unknown argument:|error: option) '([^']*)'"#] {
+                            argumentsToRemove.insert(argh
+                                .replacingOccurrences(of: "\\", with: "\\\\"))
+                        }
+                        for argh: String in error[
+                            #"(?:unexpected|duplicate) input file: '(.*?)'?error:"#] {
+                            argumentsToRemove.insert(argh)
+                        }
+                        if argumentsToRemove.count > toRemove {
+                            continue
+                        }
+                        self.log(error)
+                        break
                     }
-                    for argh: String in error[
-                        #"(?:unexpected|duplicate) input file: '(.*?)'?error:"#] {
-                        argumentsToRemove.insert(argh)
+
+                    let dict = SKApi.response_get_value(info)
+                    if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ??
+                                   dict.getString(key: sourceKit.annotatedID),
+                       notes.contains("ref.protocol") {
+    //                    log(notes)
+                        for (usr, name): (String, String) in notes[
+                            #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
+                            protocols[name] = "$s"+usr
+                        }
                     }
-                    if argumentsToRemove.count > toRemove {
-                        continue
-                    }
-                    self.log(error)
+
                     break
                 }
+            }
+            #endif
+        }
 
-                let dict = SKApi.response_get_value(info)
-                if let notes = dict.getString(key: sourceKit.fullyAnnotatedID) ??
-                               dict.getString(key: sourceKit.annotatedID),
-                   notes.contains("ref.protocol") {
-//                    log(notes)
-                    for (usr, name): (String, String) in notes[
-                        #"<ref.protocol usr=\"[sc]:([^"]*)\">([^<]*)</ref.protocol>"#] {
-                        protocols[name] = "$s"+usr
-                    }
-                }
+        return (protocols, fileSyntax)
+    }
 
-                break
+    public typealias Replace = (from: String, to: String)
+    public typealias Patch = (offset: Int, replace: Replace)
+
+    func process(syntax: sourcekitd_response_t, for fullpath: String,
+                 protocols: ProtocolInfo, protoRegex: String,
+                 decider: @escaping (
+                    _ proto: String, _ context: String,
+                    _ type: String, _ protocols: ProtocolInfo)
+                 -> String) -> [Patch] {
+        var patches = [Patch]()
+
+        let syntax = SKApi.response_get_value(syntax)
+        sourceKit.recurseOver(childID: sourceKit.structureID,
+                              resp: syntax) { node in
+            let offset = node.getInt(key: sourceKit.offsetID)
+            if let kind = node.getUUIDString(key: sourceKit.kindID),
+               let type = node.getString(key: sourceKit.typenameID),
+               let proto: String = type[protoRegex] {
+                // Elide this parameter to some/any?
+                let prefix = decider(proto, kind, type, protocols)
+                patches.append((offset: offset, (
+                                 from: proto, to: prefix+"$1")))
             }
         }
-        #endif
+
+//        log("PATCHES", patches)
+        return patches
     }
 
-    return (protocols, fileSyntax)
-}
-
-public typealias Replace = (from: String, to: String)
-public typealias Patch = (offset: Int, replace: Replace)
-
-func process(syntax: sourcekitd_response_t, for fullpath: String,
-             protocols: ProtocolInfo, protoRegex: String,
-             decider: @escaping (
-                _ proto: String, _ context: String,
-                _ type: String, _ protocols: ProtocolInfo)
-             -> String) -> [Patch] {
-    var patches = [Patch]()
-
-    let syntax = SKApi.response_get_value(syntax)
-    sourceKit.recurseOver(childID: sourceKit.structureID,
-                          resp: syntax) { node in
-        let offset = node.getInt(key: sourceKit.offsetID)
-        if let kind = node.getUUIDString(key: sourceKit.kindID),
-           let type = node.getString(key: sourceKit.typenameID),
-           let proto: String = type[protoRegex] {
-            // Elide this parameter to some/any?
-            let prefix = decider(proto, kind, type, protocols)
-            patches.append((offset: offset, (
-                             from: proto, to: prefix+"$1")))
+    func extractAnyErrors(project: URL, xcode: String,
+        protocols: inout ProtocolInfo, commands: [String])
+        -> (patches: [String: [ErrorPatch]], errors: [String]) {
+        let name = (project.lastPathComponent == "Package.swift" ?
+                    project.deletingLastPathComponent() :
+                    project.deletingPathExtension()).lastPathComponent,
+            tmplog = "\"/tmp/rebuild_\(name).txt\"", builder =
+                "\(xcode)/Contents/Developer/usr/bin/xcodebuild",
+            xcbuild = """
+                \(builder) OTHER_SWIFT_FLAGS=\
+                '-DDEBUG -enable-upcoming-feature ExistentialAny' \
+                -project \(project.lastPathComponent)
+                """,
+            rebuild = project
+                .lastPathComponent == "Package.swift" ? """
+                \(xcode)/Contents/Developer/\
+                Toolchains/XcodeDefault.xctoolchain/usr/bin/\
+                swift build -Xswiftc -enable-upcoming-feature \
+                -Xswiftc ExistentialAny
+                """ : """
+                \(xcbuild) || \(builder) clean && \(xcbuild)
+                """
+        guard let stdout = Popen(cmd: """
+                (\(rebuild)) >\(tmplog) 2>&1; STATUS=$?; sort -u \(tmplog); exit $STATUS
+                """) else {
+            log("⚠️ Could not open rebuild: "+rebuild)
+            return ([:], [])
         }
-    }
 
-//    log("PATCHES", patches)
-    return patches
-}
+        var out = [String: [ErrorPatch]]()
+        var errors = parseErrors(stdout: stdout,
+             protocols: &protocols, out: &out)
 
-func apply(patches: [Patch], for file: String, applier:
-    (_ line: inout String,
-     _ patch: Replace,
-     _ count: UnsafeMutablePointer<Int>) -> (),
-           count: UnsafeMutablePointer<Int>) -> String? {
-    guard let data = NSMutableData(contentsOfFile: file) else {
-        return nil
-    }
-
-    var zero: Int8 = 0
-    data.append(&zero, length: 1)
-
-    let bytes = UnsafeMutablePointer<CChar>(mutating:
-        data.bytes.assumingMemoryBound(to: CChar.self))
-
-    var parts = [String]() // apply patches in reverse order
-    for (offset, patch) in patches.sorted(by: { $0.0 > $1.0 }) {
-        var lines = String(cString: bytes+offset)
-            .components(separatedBy: "\n")
-        defer {
-            parts.append(lines.joined(separator: "\n"))
+        if !stdout.terminatedOK(),
+            project.lastPathComponent != "Package.swift" {
+            log("ℹ️ Compiling individual files as xcodebuild failed: "+rebuild)
+            errors = fallbackBuild(using: commands, tmplog: tmplog,
+                           protocols: &protocols, out: &out)
         }
-        bytes[offset] = 0
-        
-        let before = String(cString: bytes)
-        guard !before[#"<\#(patch.from): "#] else { continue }
-        applier(&lines[0], patch, count)
+
+        return (out, errors ?? [])
     }
 
-    parts.append(String(cString: bytes))
-    return parts.reversed().joined()[#"some some"#, "some"]
-}
-
-public typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
-
-func addressErrors(file: String, patches: [ErrorPatch],
-                   count: UnsafeMutablePointer<Int>) -> String? {
-    guard var source = try? String(contentsOfFile: file) else {
-        log("⚠️ Could not read file: \(file)")
-        return nil
+    func fallbackBuild(using commands: [String], tmplog: String,
+                       protocols: inout ProtocolInfo,
+                       out: inout [String: [ErrorPatch]]) -> [String] {
+        var total = [String]()
+        for var command in commands {
+            command[#"builtin-swiftTaskExecution -- "#] = ""
+            command[#"( -c) "#] =
+                "$1 -enable-upcoming-feature ExistentialAny"
+            command[#"-supplementary-output-file-map \S+ "#] = ""
+            command[#"Bridging-Header-swift_(\w+)"#] = "*"
+            command[#"-frontend-parseable-output "#] = ""
+            command += " 2>&1 | tee -a \(tmplog)"
+            for _ in 1...3 {
+                guard let stdout = Popen(cmd: command) else {
+                    log("⚠️ Could not execute: "+command)
+                    break
+                }
+                if let errors = parseErrors(stdout: stdout,
+                    protocols: &protocols, out: &out) {
+                    _ = stagePhaseOnce
+                    total += errors
+                    break
+                }
+            }
+        }
+        return total
     }
 
-    for patch in patches.sorted(by: { $0.line > $1.line }) {
-        source[patch.replace.from, count: count] = [patch.replace.to]
+    func apply(patches: [Patch], for file: String, applier:
+        (_ line: inout String,
+         _ patch: Replace,
+         _ count: UnsafeMutablePointer<Int>) -> (),
+               count: UnsafeMutablePointer<Int>) -> String? {
+        guard let data = NSMutableData(contentsOfFile: file) else {
+            return nil
+        }
+
+        var zero: Int8 = 0
+        data.append(&zero, length: 1)
+
+        let bytes = UnsafeMutablePointer<CChar>(mutating:
+            data.bytes.assumingMemoryBound(to: CChar.self))
+
+        var parts = [String]() // apply patches in reverse order
+        for (offset, patch) in patches.sorted(by: { $0.0 > $1.0 }) {
+            var lines = String(cString: bytes+offset)
+                .components(separatedBy: "\n")
+            defer {
+                parts.append(lines.joined(separator: "\n"))
+            }
+            bytes[offset] = 0
+
+            let before = String(cString: bytes)
+            guard !before[#"<\#(patch.from): "#] else { continue }
+            applier(&lines[0], patch, count)
+        }
+
+        parts.append(String(cString: bytes))
+        return parts.reversed().joined()[#"some some"#, "some"]
     }
 
-    return source
-}
+    public typealias ErrorPatch = (line: Int, col: Int, replace: Replace)
 
+    func addressErrors(file: String, patches: [ErrorPatch],
+                       count: UnsafeMutablePointer<Int>) -> String? {
+        guard var source = try? String(contentsOfFile: file) else {
+            log("⚠️ Could not read file: \(file)")
+            return nil
+        }
+
+        for patch in patches.sorted(by: { $0.line > $1.line }) {
+            source[patch.replace.from, count: count] = [patch.replace.to]
+        }
+
+        return source
+    }
 }
