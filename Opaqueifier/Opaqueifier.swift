@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import Cocoa
 import Popen
 
 // Defines a subscript of a string by a raw
@@ -30,6 +29,12 @@ extension Date {
         return Date.timeIntervalSinceReferenceDate
     }
 }
+
+#if os(Linux)
+func objc_getClass(_ named: String) -> AnyClass? {
+    return nil
+}
+#endif
 
 open class Opaqueifier {
 

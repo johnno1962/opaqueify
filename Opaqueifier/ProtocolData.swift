@@ -5,6 +5,7 @@
 //  Created by John Holdsworth on 28/10/2023.
 //
 
+#if canImport(Cocoa)
 import Cocoa
 import DLKit
 
@@ -21,6 +22,7 @@ public let objcCocoaProtocols = {
     }
     return names
 }()
+#endif
 
 public let objcUIKitProtocols = [ // extracted using iOS App
     "_UIObjectTraitTokenProtocol": "UIKitCore",

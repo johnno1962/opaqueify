@@ -83,7 +83,7 @@ func appsIn(dir: String, matcher: (_ name: String) -> Bool) -> [String] {
         .filter(matcher).sorted().reversed().map { "\(dir)/\($0)" }
 }
 
-#if os(Linux)
+#if os(Linux) && false
 let toolchainLoader = Loader(searchPaths: [linuxSourceKitLibPath])
 #else
 let toolchainLoader = Loader(searchPaths: [
@@ -349,6 +349,7 @@ public class SourceKit {
                      block: @escaping (_ dict: sourcekitd_variant_t) -> Void) {
         let children = SKApi.variant_dictionary_get_value(resp, childID)
         switch SKApi.variant_get_type(children) {
+        #if !os(Linux)
         case SOURCEKITD_VARIANT_TYPE_ARRAY:
                 visualiser?.enter()
             _ = SKApi.variant_array_apply(children) { (_, dict) in
@@ -361,6 +362,7 @@ public class SourceKit {
                 return true
             }
             visualiser?.exit()
+        #endif
         case SOURCEKITD_VARIANT_TYPE_DICTIONARY:
             block(children)
             self.recurseOver(childID: childID, resp: children, indent: indent+"  ",

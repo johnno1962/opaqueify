@@ -9,7 +9,6 @@
 //
 
 import Foundation
-import Fortify // Catch fatal errors and stack trace
 #if SWIFT_PACKAGE
 import Opaqueifier
 #endif
@@ -20,6 +19,13 @@ guard argv.count > 1 else {
     print("Usage: \(argv[0]) <project> [/Apllications/Xcode15.app]")
     exit(EXIT_FAILURE)
 }
+
+#if !canImport(Darwin)
+exit(Opaqueifier().main(projectPath: argv[1],
+                        xcode15Path: argv.count > 2 ? argv[2] : nil,
+        knownPotocols: [objcUIKitProtocols]))
+#else
+import Fortify // Catch fatal errors and stack trace
 
 do {
     try Fortify.protect {
@@ -39,3 +45,4 @@ do {
         """)
     exit(EXIT_FAILURE)
 }
+#endif
