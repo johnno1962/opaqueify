@@ -214,6 +214,13 @@ extension Opaqueifier { // Was originally a script, now encapsulated in a class
     func extractAnyErrors(project: URL, xcode: String,
         protocols: inout ProtocolInfo, commands: [String])
         -> (patches: [String: [ErrorPatch]], errors: [String]) {
+        #if os(Linux)
+        let tcpath = ""
+        #else
+        let tcpath = xcode+"""
+            /Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/
+            """
+        #endif
         let name = (project.lastPathComponent == "Package.swift" ?
                     project.deletingLastPathComponent() :
                     project.deletingPathExtension()).lastPathComponent,
@@ -226,9 +233,7 @@ extension Opaqueifier { // Was originally a script, now encapsulated in a class
                 """,
             rebuild = project
                 .lastPathComponent == "Package.swift" ? """
-                \(xcode)/Contents/Developer/\
-                Toolchains/XcodeDefault.xctoolchain/usr/bin/\
-                swift build -Xswiftc -enable-upcoming-feature \
+                "\(tcpath)swift" build -Xswiftc -enable-upcoming-feature \
                 -Xswiftc ExistentialAny
                 """ : """
                 \(xcbuild) || \(builder) clean && \(xcbuild)
