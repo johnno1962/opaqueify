@@ -256,7 +256,7 @@ open class Opaqueifier {
         for _ in 1...5 {
             // @objc or cases cannot have generic params
             // allow "case .some" though
-            source[#"(?:@objc|\bcase)\s+.*[^\.]\b(some)\b"#, count: count] = "any"
+            source[#"(?:@objc|\bcase)\s+.*[^\."]\b(some)\b"#, count: count] = "any"
         }
 
         fixOptionals(source: &source, protoRegex: protoRegex, count: count)
@@ -268,7 +268,7 @@ open class Opaqueifier {
     }
 
     open lazy var stagePhaseOnce: () = {
-        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
+//        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
     }()
 
     open func parseErrors(stdout: Popen,

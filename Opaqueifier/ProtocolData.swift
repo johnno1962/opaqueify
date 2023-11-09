@@ -22,6 +22,8 @@ public let objcCocoaProtocols = {
     }
     return names
 }()
+#else
+public let objcCocoaProtocols = [String: String]()
 #endif
 
 public let objcUIKitProtocols = [ // extracted using iOS App
