@@ -228,13 +228,14 @@ extension Opaqueifier { // Was originally a script, now encapsulated in a class
                 "\(xcode)/Contents/Developer/usr/bin/xcodebuild",
             xcbuild = """
                 \(builder) OTHER_SWIFT_FLAGS=\
-                '-DDEBUG -enable-upcoming-feature ExistentialAny' \
+                '-DDEBUG\(!anyfy ? "" :
+                    " -enable-upcoming-feature ExistentialAny")' \
                 -project \(project.lastPathComponent)
                 """,
             rebuild = project
                 .lastPathComponent == "Package.swift" ? """
-                "\(tcpath)swift" build -Xswiftc -enable-upcoming-feature \
-                -Xswiftc ExistentialAny
+                "\(tcpath)swift" build\(!anyfy ? "" :
+                " -Xswiftc -enable-upcoming-feature -Xswiftc ExistentialAny")
                 """ : """
                 \(xcbuild) || \(builder) clean && \(xcbuild)
                 """
@@ -265,8 +266,10 @@ extension Opaqueifier { // Was originally a script, now encapsulated in a class
         var total = [String]()
         for var command in commands {
             command[#"builtin-swiftTaskExecution -- "#] = ""
-            command[#"( -c) "#] =
-                "$1 -enable-upcoming-feature ExistentialAny"
+            if anyfy {
+                command[#"( -c) "#] =
+                    "$1 -enable-upcoming-feature ExistentialAny"
+            }
             command[#"-supplementary-output-file-map \S+ "#] = ""
             command[#"Bridging-Header-swift_(\w+)"#] = "*"
             command[#"-frontend-parseable-output "#] = ""

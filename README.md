@@ -2,6 +2,16 @@
 
 Greater use of Opaque types (in preparation for SE0335/Swift 6)
 
+Stop press: [It's been announced](https://forums.swift.org/t/progress-toward-the-swift-6-language-mode/68315) SE0335 will not be included in
+Swift 6 and the "elision" to existentials will not be removed
+for now so the urgency behind this project has rather abated.
+
+I've changed the source to introduce the `some` keyword mainly 
+which should provide a minor speed improvement for some projects
+for which it may still be useful. It's probably still worth 
+running processing over your Package to realise much of the 
+performance motivation behind SE0335 and see how you go..
+
 This project creates an executable that can be used to prepare
 sources for Swift 6 where most references to protocols need
 to be prefixed with with `any` or `some`. This is been discussed

@@ -18,7 +18,7 @@ let package = Package(
         .package(url: "https://github.com/johnno1962/Fortify.git",
                  .upToNextMinor(from: "2.1.7")),
         .package(url: "https://github.com/johnno1962/Popen.git",
-                 .upToNextMinor(from: "2.0.1")),
+                 .upToNextMinor(from: "2.0.2")),
         .package(url: "https://github.com/johnno1962/DLKit.git",
                  .upToNextMinor(from: "3.2.3")),
     ],

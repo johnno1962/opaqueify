@@ -38,6 +38,7 @@ func objc_getClass(_ named: String) -> AnyClass? {
 
 open class Opaqueifier {
 
+    open var anyfy = false
     let start = Date.nowInterval
 
     public init() {}
@@ -200,7 +201,7 @@ open class Opaqueifier {
             // and never `some` for a system protocol
             // to avoid breaking common conformances.
             notSystemProtocol //|| proto == "Error"
-            ? "some " : "any "
+            ? "some " : anyfy ? "any " : ""
     }
 
     // Code that actually patches the source..
@@ -222,8 +223,8 @@ open class Opaqueifier {
 
         // a few special cases to revert to any
         // varargs, default arguments, protocol types, closures
-        line[#"(some (\#(ident)\s*))(?=\.\.\.| =|\.Type|\) in)"#]
-            = ["any $2"]
+        line[#"(some (\#(ident)\s*))(?=\.\.\.| =|\.Type|\) in)"#, count: count]
+            = [(anyfy ?"any ":"")+"$2"]
     }
 
     open func fixOptionals(source: inout String, protoRegex: String,
@@ -231,11 +232,12 @@ open class Opaqueifier {
         // fix up optional syntax (I don't judge)
         let optional = #"\b((?:\w+\.)*("# + protoRegex + #")(?:\.Type)?)"#
         source[#"\b((?:any|some)(\s+\#(optional)))([?!])"#,
-               0, count: count] = "(any $3)$5"
+               count: count] = "(any $3)$5"
     }
 
     open func adhocFixes(source: inout String, protoRegex: String,
                          count: UnsafeMutablePointer<Int>) {
+        if anyfy {
         // A few ad-hoc patches improve the odds.
         // is/as seems to get missed by the syntax tree
         let cast = #"(\s+(?:is|as[?!]?)\s+)((?:\w+\.)?("# +
@@ -245,18 +247,20 @@ open class Opaqueifier {
                 groups[2].hasPrefix("Any") ? "" : "any "
             return groups[1]+elide+groups[2]
         }
+        }
 
         // "constrained to non-protocol, non-class type"
         source[#"<\w+:( any) "#, count: count] = ""
 
         // promote returning some (with exceptions e.g Disposable in RxSwift)
         source[#"-> (any) (?!Encoder|Decoder|Disposable)\#(protoRegex) \{"#,
-               1, count: count] = "some"
+               count: count] = "some"
 
         for _ in 1...5 {
             // @objc or cases cannot have generic params
-            // allow "case .some" though
-            source[#"(?:@objc|\bcase)\s+.*[^\."]\b(some)\b"#, count: count] = "any"
+            // allow "case .some" though or in strings
+            source[#"(?:@objc|\bcase)\s+[^\.")]+\b(some )\b"#, count: count] =
+                anyfy ? "any " : ""
         }
 
         fixOptionals(source: &source, protoRegex: protoRegex, count: count)
@@ -268,7 +272,7 @@ open class Opaqueifier {
     }
 
     open lazy var stagePhaseOnce: () = {
-//        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
+        log(Popen.system("git add .") ?? "⚠️ Stage failed", terminator: "")
     }()
 
     open func parseErrors(stdout: Popen,
@@ -281,7 +285,7 @@ open class Opaqueifier {
                 #"PCH file '(([^']+?-Bridging-Header-swift_)\w+(-clang_\w+.pch))' not found:"#] {
                 log(Popen.system("/bin/bash -xc '/bin/ln -s \(before)*\(after) \(path)'") ??
                       "⚠️ Linking PCH failed")
-                return nil
+                return nil // retry build..
             }
             if let (file, line, col): (String, String, String) =
                 output[#"^([^:]+):(\d+)(?::(\d+))?: error: "#],
